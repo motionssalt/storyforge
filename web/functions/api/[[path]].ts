@@ -19,6 +19,7 @@ import {
   triggerWaitingTasksOnKeysReady,
 } from "../../shared/publisher";
 import { AppSettings, CadenceUnit, Env, PublishMode, ZernioKeyRow } from "../../shared/types";
+import { renderAgentPrompt } from "../../shared/prompt";
 import { getZernioAdapter } from "../../shared/zernio";
 
 const VALID_EMOTIONS = new Set(["calm", "tense", "angry", "shocked", "sad", "sarcastic", "whisper", "excited"]);
@@ -1220,18 +1221,12 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     } catch {
       return jsonResp({ error: "Invalid JSON body" }, 400);
     }
-    const idea = String(body.idea || "").trim();
-    const targetWpm = Number(body.target_wpm) || 250;
-    if (!idea) return jsonResp({ error: "Enter a story idea first." }, 400);
-
     const template = await env.STORYFORGE_VAULT.get("vault:agent_prompt");
-    if (!template) {
-      return jsonResp({ error: "Prompt template not configured in KV vault." }, 500);
+    const rendered = renderAgentPrompt(template, body.idea, body.target_wpm);
+    if (!rendered.ok) {
+      return jsonResp({ error: rendered.error }, rendered.status);
     }
-    const prompt = template
-      .replace(/\{\{STORY_IDEA\}\}/g, idea)
-      .replace(/\{\{TARGET_WPM\}\}/g, String(targetWpm));
-    return jsonResp({ prompt });
+    return jsonResp({ prompt: rendered.prompt });
   }
 
   if (path === "/api/validate" && request.method === "POST") {

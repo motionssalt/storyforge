@@ -850,8 +850,10 @@
   buildPromptBtn.addEventListener("click", async () => {
     hideEl(promptErr);
     copyStatus.textContent = "";
-    const idea = ideaInput.value.trim();
-    if (!idea) {
+    const idea = ideaInput.value;
+    if (!idea.trim()) {
+      promptOutput.value = "";
+      promptWrap.classList.add("hidden");
       showErr(promptErr, "Enter a story idea first.");
       return;
     }
@@ -862,6 +864,8 @@
         body: JSON.stringify({ idea, target_wpm: Number(wpmInput.value) || 250 }),
       });
       if (!r.ok) {
+        promptOutput.value = "";
+        promptWrap.classList.add("hidden");
         showErr(promptErr, r.data.error || "Failed to build prompt");
         return;
       }
