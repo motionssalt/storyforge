@@ -21,7 +21,7 @@ import {
 import { AppSettings, CadenceUnit, Env, PublishMode, ZernioKeyRow } from "../../shared/types";
 import { getZernioAdapter } from "../../shared/zernio";
 
-const VALID_EMOTIONS = new Set(["neutral", "tense", "shocked", "dramatic", "funny", "sad", "resolved"]);
+const VALID_EMOTIONS = new Set(["calm", "tense", "angry", "shocked", "sad", "sarcastic", "whisper", "excited"]);
 const VALID_THEMES = new Set(["dark", "light"]);
 const VALID_AWARD_TYPES = new Set(["gold", "helpful", "heart"]);
 const VALID_CADENCE_UNITS = new Set<CadenceUnit>(["day", "week", "month"]);

@@ -595,7 +595,10 @@ export async function processPublishingTick(env: Env): Promise<{ checked: number
 
     // Live / Mock upload + createPost
     try {
-      const { body, sizeBytes } = await fetchGitHubRenderAssetStream(env, part);
+      const { body, sizeBytes } =
+        adapter.isMock && (!part.asset_id || Number(part.asset_id) <= 0)
+          ? { body: new ArrayBuffer(0), sizeBytes: Number(part.size_bytes || 0) }
+          : await fetchGitHubRenderAssetStream(env, part);
       const mediaUrl = await adapter.uploadVideoFromStream(
         keyRow.api_key,
         part.filename || `${first.task_id}_part${part.part_number}.mp4`,
