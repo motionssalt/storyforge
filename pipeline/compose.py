@@ -10,10 +10,13 @@ Combines:
 
 from __future__ import annotations
 
+import json
 import math
+import os
 import subprocess
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
+from progress import run_ffmpeg_with_progress
 from tts_engine import LineTiming, WordTiming
 
 
@@ -142,6 +145,7 @@ def compose_scrolling_video(
     line_timings: dict[str, LineTiming],
     out_mp4_path: str,
     duration_sec: float,
+    progress_cb: Callable[[float], None] | None = None,
 ) -> str:
     """Render final 1080x1920 30fps H.264 MP4 with persistent auto-scrolling Reddit post card."""
     from PIL import Image
@@ -232,9 +236,9 @@ def compose_scrolling_video(
         "-c:v",
         "libx264",
         "-preset",
-        "medium",
+        "veryfast",
         "-crf",
-        "22",
+        "19",
         "-pix_fmt",
         "yuv420p",
         "-c:a",
@@ -248,16 +252,12 @@ def compose_scrolling_video(
         out_mp4_path,
     ]
 
-    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-    assert proc.stdin is not None
-
-    try:
+    def feed_frames(stdin_pipe) -> None:
         for f in range(total_frames):
             sy = scroll_curve[f]
             y0 = int(math.floor(sy))
             frac = sy - y0
             y1 = min(actual_body_h, y0 + vh + 2)
-
             strip_h = max(vh + 2, y1 - y0)
             strip = Image.new("RGBA", (vw, strip_h), (0, 0, 0, 0))
             if y1 > y0:
@@ -308,15 +308,14 @@ def compose_scrolling_video(
                 else:
                     frame_rgba = Image.alpha_composite(frame_rgba, bot_fade_base)
 
-            proc.stdin.write(frame_rgba.convert("RGB").tobytes())
+            stdin_pipe.write(frame_rgba.convert("RGB").tobytes())
 
-        proc.stdin.close()
-    except BrokenPipeError:
-        pass
-
-    ret = proc.wait()
-    if ret != 0:
-        raise subprocess.CalledProcessError(ret, cmd)
+    run_ffmpeg_with_progress(
+        cmd=cmd,
+        duration_sec=duration_sec,
+        on_progress=progress_cb,
+        stdin_feeder=feed_frames,
+    )
     return out_mp4_path
 
 
@@ -420,3 +419,95 @@ def compose_video(
     subprocess.run(cmd, check=True)
     return out_mp4_path
 
+
+
+def probe_video_stats(video_path: str) -> dict[str, Any]:
+    size_bytes = os.path.getsize(video_path)
+    out = subprocess.check_output(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration,bit_rate:stream=width,height,codec_type",
+            "-of",
+            "json",
+            video_path,
+        ],
+        text=True,
+    )
+    info = json.loads(out)
+    fmt = info.get("format", {})
+    dur = float(fmt.get("duration") or 0.0)
+    bitrate_bps = int(fmt.get("bit_rate") or 0)
+    if bitrate_bps <= 0 and dur > 0:
+        bitrate_bps = int((size_bytes * 8) / dur)
+    w = 0
+    h = 0
+    for st in info.get("streams", []):
+        if st.get("codec_type") == "video":
+            w = int(st.get("width") or 0)
+            h = int(st.get("height") or 0)
+            break
+    return {
+        "size_bytes": size_bytes,
+        "duration_sec": dur,
+        "bitrate_kbps": round(bitrate_bps / 1000.0, 1),
+        "width": w,
+        "height": h,
+    }
+
+
+def compress_final_video(
+    in_mp4_path: str,
+    out_mp4_path: str,
+    duration_sec: float,
+    progress_cb: Callable[[float], None] | None = None,
+) -> dict[str, Any]:
+    """
+    SF-010 final quality-based H.264 re-encode with bitrate ceiling so output size
+    is predictable (~2-3 Mbps avg, <4 Mbps ceiling, ~30-45 MB per 2-min video)
+    regardless of source background bitrate, while keeping card & subtitle text sharp.
+    """
+    before = probe_video_stats(in_mp4_path)
+    dur = before["duration_sec"] or duration_sec
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        in_mp4_path,
+        "-vf",
+        "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1",
+        "-r",
+        "30",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "24",
+        "-maxrate",
+        "2800k",
+        "-bufsize",
+        "5600k",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-ar",
+        "44100",
+        "-movflags",
+        "+faststart",
+        out_mp4_path,
+    ]
+    run_ffmpeg_with_progress(cmd=cmd, duration_sec=dur, on_progress=progress_cb)
+    after = probe_video_stats(out_mp4_path)
+    return {
+        "before_bytes": before["size_bytes"],
+        "before_kbps": before["bitrate_kbps"],
+        "after_bytes": after["size_bytes"],
+        "after_kbps": after["bitrate_kbps"],
+        "duration_sec": after["duration_sec"],
+    }

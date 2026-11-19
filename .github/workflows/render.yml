@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       job_id:
-        description: "StoryForge Job ID stored in Cloudflare KV"
+        description: "StoryForge Job ID"
         required: true
         type: string
       test_background:
@@ -62,6 +62,7 @@ jobs:
           WORKER_URL: ${{ secrets.WORKER_URL }}
           WORKER_INTERNAL_SECRET: ${{ secrets.WORKER_INTERNAL_SECRET }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: python pipeline/run_job.py
 
       - name: Preserve render diagnostics

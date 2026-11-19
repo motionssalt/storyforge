@@ -5,3 +5,8 @@ pages_build_output_dir = "public"
 [[kv_namespaces]]
 binding = "STORYFORGE_VAULT"
 id = "db3e4ce60c4746c6aae86d0377b08680"
+
+[[d1_databases]]
+binding = "STORYFORGE_DB"
+database_name = "storyforge-db"
+database_id = "8cf8f1c3-20dc-4a23-a42f-6da7b1f3e29d"

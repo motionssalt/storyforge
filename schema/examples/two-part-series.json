@@ -94,18 +94,21 @@
           "id": "L13",
           "text": "The lawyer nodded, so I reached into my coat pocket, tore open the cheap packet of wet wipes, and pressed one damp corner directly onto the final letter of Uncle Leo's name. [pause]",
           "emotion": "whisper",
-          "markers": ["pause"]
+          "markers": [
+            "pause"
+          ]
         },
         {
           "id": "L14",
           "text": "When I lifted my thumb, the lawyer stared at the paper and his face went completely sheet-white.",
           "emotion": "shocked"
         }
-      ]
+      ],
+      "description": "Part 1: At Uncle Leo's will reading, Cousin Trevor presents a brand-new notarized addendum claiming 90% of the estate\u2014until a cheap wet wipe tests the signature ink."
     },
     {
       "part_number": 2,
-      "title": "[PART 2] Fresh fountain ink bleeds under moisture—laser-printed forged signatures don't move a millimeter",
+      "title": "[PART 2] Fresh fountain ink bleeds under moisture\u2014laser-printed forged signatures don't move a millimeter",
       "hashtags": [
         "#redditstories",
         "#storytime",
@@ -128,7 +131,7 @@
         ],
         "nsfw": false,
         "verified": true,
-        "title": "PART 2 | Fresh fountain ink bleeds under moisture—laser-printed forged signatures don't move a millimeter"
+        "title": "PART 2 | Fresh fountain ink bleeds under moisture\u2014laser-printed forged signatures don't move a millimeter"
       },
       "lines": [
         {
@@ -143,7 +146,7 @@
         },
         {
           "id": "L3",
-          "text": "I didn't blink—I pulled Uncle Leo's birthday card out of my coat pocket and touched the same wet wipe to his signature inside the card.",
+          "text": "I didn't blink\u2014I pulled Uncle Leo's birthday card out of my coat pocket and touched the same wet wipe to his signature inside the card.",
           "emotion": "calm"
         },
         {
@@ -170,7 +173,9 @@
           "id": "L8",
           "text": "Better yet, I played the voicemail from Uncle Leo's credit union manager from two weeks earlier, confirming Leo had personally frozen every change to his estate file unless two witnesses and his attorney were present in person. [laugh]",
           "emotion": "excited",
-          "markers": ["laugh"]
+          "markers": [
+            "laugh"
+          ]
         },
         {
           "id": "L9",
@@ -184,7 +189,7 @@
         },
         {
           "id": "L11",
-          "text": "Trevor didn't say another word—he unclasped Uncle Leo's vintage gold watch, set it beside the damp wet wipe, and walked out beside two security guards.",
+          "text": "Trevor didn't say another word\u2014he unclasped Uncle Leo's vintage gold watch, set it beside the damp wet wipe, and walked out beside two security guards.",
           "emotion": "calm"
         },
         {
@@ -192,7 +197,8 @@
           "text": "Probate wrapped up two months later under Leo's original will, and I still keep that cheap packet of wet wipes right next to his fountain pen on my desk.",
           "emotion": "calm"
         }
-      ]
+      ],
+      "description": "Part 2: Fresh fountain ink bleeds under moisture, while laser-printed forged signatures don't move a millimeter. Watch how Cousin Trevor gets exposed on the spot."
     }
   ]
 }

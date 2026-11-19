@@ -183,6 +183,7 @@
       "required": [
         "part_number",
         "title",
+        "description",
         "hashtags",
         "story_so_far",
         "post",
@@ -225,6 +226,11 @@
             "$ref": "#/$defs/line"
           },
           "maxItems": 200
+        },
+        "description": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 2000
         }
       }
     }

@@ -36,7 +36,8 @@
           "text": "I reached for the cupboard door, and someone knocked behind me.",
           "emotion": "calm"
         }
-      ]
+      ],
+      "description": "Part 1: A missing spare key returns in a sealed envelope with a cryptic warning to check the blue cupboard."
     },
     {
       "part_number": 2,
@@ -71,7 +72,8 @@
           "text": "The warning was a joke, but I finally knew who had borrowed my spare key.",
           "emotion": "calm"
         }
-      ]
+      ],
+      "description": "Part 2: Opening the blue cupboard reveals who really borrowed the spare key and why they left that warning."
     }
   ]
 }

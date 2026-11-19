@@ -94,7 +94,9 @@
           "id": "L13",
           "text": "The judge turned to me, tapped his pen, and asked why I had taken a neighbor's money without finishing the job. [pause]",
           "emotion": "tense",
-          "markers": ["pause"]
+          "markers": [
+            "pause"
+          ]
         },
         {
           "id": "L14",
@@ -115,14 +117,17 @@
           "id": "L17",
           "text": "The judge stared at the serial numbers, looked over his glasses at Mrs. Halvorsen, and dismissed her claim on the spot while ordering her to pay my full nine hundred dollars plus court fees. [sigh]",
           "emotion": "sad",
-          "markers": ["sigh"]
+          "markers": [
+            "sigh"
+          ]
         },
         {
           "id": "L18",
           "text": "She paid with a cashier's check the next morning, and now she closes her blinds every time I back my truck down the driveway.",
           "emotion": "calm"
         }
-      ]
+      ],
+      "description": "A carpenter keeps a carbon-copy invoice book after a neighbor tries to claim a free kitchen remodel in small claims court. Wait until the judge sees the serial numbers."
     }
   ]
 }

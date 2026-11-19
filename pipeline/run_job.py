@@ -1,16 +1,14 @@
-"""
-Main render orchestrator for StoryForge GitHub Actions workflow.
+"""Main render orchestrator for StoryForge GitHub Actions workflow.
+
 Supports:
   - Worker-dispatched jobs via WORKER_URL + JOB_ID + WORKER_INTERNAL_SECRET
   - Direct local test runs via --local-json <path> --local-bg <path>
 """
-
 from __future__ import annotations
 
 import argparse
 import json
 import os
-import subprocess
 import sys
 import traceback
 import urllib.request
@@ -22,7 +20,8 @@ from background import (
     generate_test_pattern_background,
     prepare_background_clip,
 )
-from compose import compose_scrolling_video
+from compose import compose_scrolling_video, compress_final_video, probe_video_stats
+from progress import TaskReporter
 from render_cards import render_scrolling_post_assets
 from subtitles import generate_ass_subtitles
 from tts_engine import VoiceStudioCoupledSpeedupHook, get_tts_engine
@@ -35,7 +34,6 @@ def migrate_legacy_production_json(doc: dict[str, Any]) -> dict[str, Any]:
     parts = doc.get("parts")
     if not isinstance(parts, list):
         return doc
-
     out = json.loads(json.dumps(doc))
     migrated_any = False
     for part in out.get("parts", []):
@@ -53,7 +51,6 @@ def migrate_legacy_production_json(doc: dict[str, Any]) -> dict[str, Any]:
             if picked is None and isinstance(cards[0], dict):
                 picked = cards[0].get("card") if isinstance(cards[0].get("card"), dict) else {}
             picked = picked or {}
-
             post_obj: dict[str, Any] = {
                 "theme": "light" if picked.get("theme") == "light" else "dark",
                 "subreddit": str(picked.get("subreddit") or "r/stories"),
@@ -76,10 +73,13 @@ def migrate_legacy_production_json(doc: dict[str, Any]) -> dict[str, Any]:
                 post_obj["comments_count"] = str(picked["comments_count"])
             if "show_footer" in picked:
                 post_obj["show_footer"] = bool(picked["show_footer"])
-
             part["post"] = post_obj
             part.pop("cards", None)
-
+            if not part.get("description"):
+                fallback_desc = str(part.get("story_so_far") or post_obj["title"] or part.get("title") or "Story segment").strip()
+                if len(fallback_desc) < 10:
+                    fallback_desc = (fallback_desc + " — full story narrated in this clip.").strip()
+                part["description"] = fallback_desc
     if migrated_any or ("schema_version" not in out and all(isinstance(p, dict) and "post" in p for p in out.get("parts", []))):
         out["schema_version"] = 2
     return out
@@ -87,7 +87,10 @@ def migrate_legacy_production_json(doc: dict[str, Any]) -> dict[str, Any]:
 
 def worker_get_job(worker_url: str, job_id: str, secret: str) -> dict[str, Any]:
     url = f"{worker_url.rstrip('/')}/api/internal/job?id={job_id}"
-    req = urllib.request.Request(url, headers={"X-Internal-Secret": secret, "User-Agent": "StoryForge-Runner"})
+    req = urllib.request.Request(
+        url,
+        headers={"X-Internal-Secret": secret, "User-Agent": "StoryForge-Runner"},
+    )
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read())
 
@@ -127,6 +130,7 @@ def ensure_renders_release(repo: str, token: str) -> dict[str, Any]:
 
 
 def upload_mp4_to_release(repo: str, token: str, release: dict[str, Any], mp4_path: str, asset_name: str) -> dict[str, Any]:
+    import subprocess
     for a in release.get("assets", []):
         if a["name"] == asset_name:
             subprocess.run(
@@ -138,6 +142,8 @@ def upload_mp4_to_release(repo: str, token: str, release: dict[str, Any], mp4_pa
                     f"https://api.github.com/repos/{repo}/releases/assets/{a['id']}",
                     "-H",
                     f"Authorization: Bearer {token}",
+                    "-H",
+                    "User-Agent: StoryForge-Runner",
                 ],
                 check=True,
             )
@@ -153,6 +159,8 @@ def upload_mp4_to_release(repo: str, token: str, release: dict[str, Any], mp4_pa
             f"Authorization: Bearer {token}",
             "-H",
             "Content-Type: video/mp4",
+            "-H",
+            "User-Agent: StoryForge-Runner",
             "--data-binary",
             f"@{mp4_path}",
         ],
@@ -172,14 +180,33 @@ def render_all_parts(
     github_token: str | None,
     local_bg: str | None = None,
     test_background: bool = False,
+    background_mode: str = "sequential",
+    background_clip: str | None = None,
     tts_engine_name: str = "edge",
     coupled_speedup_factor: float | None = None,
+    reporter: TaskReporter | None = None,
+    stage_ref: list[str] | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
+    def emit(stage: str, msg: str, pct: float | None = None, level: str = "info") -> None:
+        if stage_ref is not None:
+            stage_ref[0] = stage
+        print(f"[{stage}] {msg}", flush=True)
+        if reporter is not None:
+            reporter.log(stage, msg, pct, level=level)
+
+    def emit_pct(stage: str, pct: float) -> None:
+        if stage_ref is not None:
+            stage_ref[0] = stage
+        if reporter is not None:
+            reporter.update_progress(stage, pct)
+
     root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     production_json = migrate_legacy_production_json(production_json)
     from jsonschema import Draft202012Validator
+
     with open(os.path.join(root, "schema", "production.schema.json")) as schema_file:
         Draft202012Validator(json.load(schema_file)).validate(production_json)
+
     avatars_dir = os.path.join(root, "assets", "avatars")
     avatar_cache_dir = os.path.join(work_dir, "avatars_cache")
     fonts_dir = os.path.join(root, "assets", "fonts")
@@ -193,15 +220,36 @@ def render_all_parts(
         if not manifest_clips:
             raise RuntimeError("No clips found in 'backgrounds' release manifest.json")
 
+    # Resolve specific clip starting index if background_mode == 'specific'
+    specific_idx: int | None = None
+    if background_mode == "specific" and background_clip and manifest_clips:
+        for i, c in enumerate(manifest_clips):
+            if c.get("filename") == background_clip:
+                specific_idx = i
+                break
+        if specific_idx is None:
+            emit(
+                "background",
+                f"Requested default/specific clip '{background_clip}' not found in library; falling back to sequential index #{bg_index}.",
+                level="warn",
+            )
+
     rendered_parts: list[dict[str, Any]] = []
     cur_bg_idx = bg_index
+    total_parts = len(production_json["parts"])
+    # Reserve 0..88% for per-part rendering+compression, 88..98% for upload
+    render_budget = 86.0
 
     for p_idx, part in enumerate(production_json["parts"]):
         p_num = int(part.get("part_number", p_idx + 1))
+        part_tag = f"Part {p_num}/{total_parts}"
+        part_base = 2.0 + (p_idx / total_parts) * render_budget
+        part_span = render_budget / total_parts
         part_dir = os.path.join(work_dir, f"part_{p_num}")
         os.makedirs(part_dir, exist_ok=True)
 
-        # 1. TTS + Word timings
+        # 1. TTS + Word timings (0..18% of part span)
+        emit("tts", f"{part_tag}: Synthesizing narration ({voice_id}, rate {voice_speed})...", part_base + part_span * 0.02)
         tts_res = engine.synthesize_lines(
             part["lines"],
             voice_id=voice_id,
@@ -210,8 +258,14 @@ def render_all_parts(
         )
         if coupled_speedup_factor and tts_engine_name != "edge":
             tts_res = VoiceStudioCoupledSpeedupHook.apply_coupled_speedup(tts_res, factor=coupled_speedup_factor)
+        emit(
+            "tts",
+            f"{part_tag}: Narration & word timings ready ({tts_res.duration_sec:.1f}s, {len(tts_res.word_timings)} words)",
+            part_base + part_span * 0.18,
+        )
 
-        # 2. Persistent auto-scrolling Reddit post card assets
+        # 2. Cards (18..28% of part span)
+        emit("cards", f"{part_tag}: Rendering persistent scrolling Reddit post card...", part_base + part_span * 0.19)
         post_assets = render_scrolling_post_assets(
             post=part["post"],
             lines=part["lines"],
@@ -219,12 +273,16 @@ def render_all_parts(
             avatars_dir=avatars_dir,
             avatar_cache_dir=avatar_cache_dir,
         )
+        emit("cards", f"{part_tag}: Scrolling card layers rendered.", part_base + part_span * 0.28)
 
-        # 3. ASS subtitles
+        # 3. Subtitles (28..31% of part span)
+        emit("subtitles", f"{part_tag}: Generating ASS word subtitles...", part_base + part_span * 0.29)
         ass_path = os.path.join(part_dir, "subtitles.ass")
         generate_ass_subtitles(tts_res.word_timings, ass_path, font_name="Lilita One")
+        emit("subtitles", f"{part_tag}: Subtitles generated.", part_base + part_span * 0.31)
 
-        # 4. Background footage (sequential per video)
+        # 4. Background footage selection & prep (31..43% of part span)
+        emit("background", f"{part_tag}: Preparing background footage...", part_base + part_span * 0.32)
         prep_bg = os.path.join(part_dir, "bg_1080x1920.mp4")
         if local_bg:
             clip_name = os.path.basename(local_bg)
@@ -239,17 +297,24 @@ def render_all_parts(
             generate_test_pattern_background(prep_bg, tts_res.duration_sec, variant_index=cur_bg_idx)
             cur_bg_idx += 1
         else:
-            clip_entry = manifest_clips[cur_bg_idx % len(manifest_clips)]
-            cur_bg_idx += 1
+            if specific_idx is not None:
+                clip_entry = manifest_clips[(specific_idx + p_idx) % len(manifest_clips)]
+            else:
+                clip_entry = manifest_clips[cur_bg_idx % len(manifest_clips)]
+                cur_bg_idx += 1
             clip_name = clip_entry["filename"]
             attribution = clip_entry.get("attribution", "")
             raw_bg = os.path.join(part_dir, clip_name)
+            emit("background", f"{part_tag}: Selected background '{clip_name}'", part_base + part_span * 0.34)
             download_release_asset(repo, "backgrounds", clip_name, raw_bg, github_token)
             prepare_background_clip(raw_bg, prep_bg, tts_res.duration_sec)
+        emit("background", f"{part_tag}: Background '{clip_name}' prepared ({tts_res.duration_sec:.1f}s)", part_base + part_span * 0.43)
 
-        # 5. Compose final MP4
+        # 5. Compose MP4 (43..75% of part span)
+        raw_out_mp4 = os.path.join(part_dir, f"{job_id}_part{p_num}_raw.mp4")
         out_filename = f"{job_id}_part{p_num}.mp4"
         out_mp4 = os.path.join(part_dir, out_filename)
+        emit("compose", f"{part_tag}: Composing 1080x1920 video + card + subtitles...", part_base + part_span * 0.44)
         compose_scrolling_video(
             bg_video_path=prep_bg,
             audio_wav_path=tts_res.audio_path,
@@ -258,23 +323,52 @@ def render_all_parts(
             post_assets=post_assets,
             word_timings=tts_res.word_timings,
             line_timings=tts_res.line_timings,
-            out_mp4_path=out_mp4,
+            out_mp4_path=raw_out_mp4,
             duration_sec=tts_res.duration_sec,
+            progress_cb=lambda frac, pb=part_base, ps=part_span: emit_pct("compose", pb + ps * (0.44 + 0.31 * frac)),
+        )
+        raw_stats = probe_video_stats(raw_out_mp4)
+        emit(
+            "compose",
+            f"{part_tag}: Compose complete ({raw_stats['size_bytes']/(1024*1024):.1f} MB, {raw_stats['bitrate_kbps']:.0f} kbps)",
+            part_base + part_span * 0.76,
+        )
+
+        # 6. SF-010 Final Compression (76..99% of part span)
+        emit("compress", f"{part_tag}: Compressing MP4 (CRF 24, 2800k maxrate, AAC 128k)...", part_base + part_span * 0.77)
+        c_stats = compress_final_video(
+            raw_out_mp4,
+            out_mp4,
+            duration_sec=tts_res.duration_sec,
+            progress_cb=lambda frac, pb=part_base, ps=part_span: emit_pct("compress", pb + ps * (0.77 + 0.22 * frac)),
+        )
+        try:
+            os.remove(raw_out_mp4)
+        except OSError:
+            pass
+        before_mb = c_stats["before_bytes"] / (1024 * 1024)
+        after_mb = c_stats["after_bytes"] / (1024 * 1024)
+        emit(
+            "compress",
+            f"{part_tag}: Compressed {before_mb:.1f} MB ({c_stats['before_kbps']:.0f} kbps) -> "
+            f"{after_mb:.1f} MB ({c_stats['after_kbps']:.0f} kbps)",
+            part_base + part_span * 0.99,
         )
 
         rendered_parts.append(
             {
                 "part_number": p_num,
                 "title": part["title"],
+                "description": part.get("description", ""),
                 "hashtags": part.get("hashtags", []),
                 "filename": out_filename,
                 "local_path": out_mp4,
                 "duration_sec": tts_res.duration_sec,
                 "background_clip": clip_name,
                 "attribution": attribution,
+                "size_bytes": c_stats["after_bytes"],
             }
         )
-
     return rendered_parts, cur_bg_idx
 
 
@@ -311,17 +405,36 @@ def main() -> None:
     gh_token = os.environ["GITHUB_TOKEN"]
     test_bg = os.environ.get("TEST_BACKGROUND", "false").lower() == "true"
 
+    reporter = TaskReporter(task_id=job_id, worker_url=worker_url, secret=secret)
+    stage_ref = ["job_started"]
+
     try:
         worker_post_status(worker_url, secret, {"job_id": job_id, "status": "running"})
         job = worker_get_job(worker_url, job_id, secret)
-        if not test_bg and job.get("background_mode", "sequential") == "sequential":
-            req = urllib.request.Request(worker_url.rstrip("/") + "/api/internal/background-index", headers={"X-Internal-Secret": secret, "User-Agent": "StoryForge-Runner"})
+
+        prod_json = job["production_json"]
+        bg_mode = str(job.get("background_mode") or "sequential")
+        bg_clip = job.get("background_clip")
+        reporter.log(
+            "job_started",
+            f"Render started: \"{prod_json.get('series_title', job_id)}\" "
+            f"({len(prod_json.get('parts', []))} part(s), voice={job['voice_id']}, bg_mode={bg_mode}"
+            f"{f' clip={bg_clip}' if bg_clip else ''})",
+            1.5,
+        )
+        reporter.flush()
+
+        if not test_bg and bg_mode == "sequential":
+            req = urllib.request.Request(
+                worker_url.rstrip("/") + "/api/internal/background-index",
+                headers={"X-Internal-Secret": secret, "User-Agent": "StoryForge-Runner"},
+            )
             with urllib.request.urlopen(req, timeout=30) as response:
                 job["background_index"] = json.loads(response.read())["index"]
 
         parts, next_bg_idx = render_all_parts(
             job_id=job_id,
-            production_json=job["production_json"],
+            production_json=prod_json,
             voice_id=job["voice_id"],
             voice_speed=job.get("voice_speed", "+34%"),
             bg_index=int(job.get("background_index", 0)),
@@ -329,16 +442,29 @@ def main() -> None:
             repo=repo,
             github_token=gh_token,
             test_background=test_bg,
+            background_mode=bg_mode,
+            background_clip=bg_clip,
+            reporter=reporter,
+            stage_ref=stage_ref,
         )
 
+        stage_ref[0] = "upload"
+        reporter.log("upload", f"Uploading {len(parts)} rendered MP4 asset(s) to GitHub Release 'renders'...", 90.0)
         rel = ensure_renders_release(repo, gh_token)
         public_parts: list[dict[str, Any]] = []
-        for p in parts:
+        for idx, p in enumerate(parts):
+            pct = 90.0 + ((idx + 1) / max(1, len(parts))) * 8.0
             asset = upload_mp4_to_release(repo, gh_token, rel, p["local_path"], p["filename"])
+            reporter.log(
+                "upload",
+                f"Uploaded {p['filename']} ({asset['size'] / (1024 * 1024):.1f} MB)",
+                pct,
+            )
             public_parts.append(
                 {
                     "part_number": p["part_number"],
                     "title": p["title"],
+                    "description": p.get("description", ""),
                     "hashtags": p["hashtags"],
                     "filename": p["filename"],
                     "asset_id": asset["id"],
@@ -349,6 +475,9 @@ def main() -> None:
                 }
             )
 
+        reporter.update_progress("render_done", 100.0, "Render & upload complete. Handing off to publishing...")
+        reporter.flush(status="done")
+
         worker_post_status(
             worker_url,
             secret,
@@ -356,15 +485,25 @@ def main() -> None:
                 "job_id": job_id,
                 "status": "done",
                 "parts": public_parts,
-                **({"next_background_index": next_bg_idx} if not test_bg else {}),
+                **({"next_background_index": next_bg_idx} if not test_bg and bg_mode == "sequential" else {}),
             },
         )
         print("JOB COMPLETE:", job_id)
     except Exception as exc:
-        err_msg = f"{exc}\n{traceback.format_exc()[-1000:]}"
+        err_short = f"[{stage_ref[0]}] {str(exc)[:420]}"
+        err_msg = f"{err_short}\n{traceback.format_exc()[-1000:]}"
         print("JOB FAILED:", err_msg, file=sys.stderr)
         try:
-            worker_post_status(worker_url, secret, {"job_id": job_id, "status": "failed", "error": str(exc)[:500]})
+            reporter.log(stage_ref[0], f"Render failed: {exc}", level="error")
+            reporter.flush(status="failed", error=err_short)
+        except Exception:
+            pass
+        try:
+            worker_post_status(
+                worker_url,
+                secret,
+                {"job_id": job_id, "status": "failed", "stage": stage_ref[0], "error": err_short[:500]},
+            )
         except Exception:
             pass
         sys.exit(1)
