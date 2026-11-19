@@ -1,4 +1,5 @@
 {
+  "schema_version": 2,
   "series_title": "The Notary's Pen",
   "format": "two_part",
   "parts": [
@@ -13,6 +14,21 @@
         "#fyp"
       ],
       "story_so_far": "At Uncle Leo's will reading, Cousin Trevor presents a brand-new notarized addendum claiming 90% of the estate. As the lawyer slides it across the table, the narrator pulls out a cheap wet wipe to test the ink.",
+      "post": {
+        "theme": "dark",
+        "subreddit": "r/pettyrevenge",
+        "username": "u/watchmaker_nephew",
+        "age": "9h",
+        "awards": [
+          {
+            "type": "gold",
+            "count": 2
+          }
+        ],
+        "nsfw": false,
+        "verified": true,
+        "title": "PART 1 | My uncle's lawyer asked why I brought wet wipes to the reading of his will"
+      },
       "lines": [
         {
           "id": "L1",
@@ -85,38 +101,6 @@
           "text": "When I lifted my thumb, the lawyer stared at the paper and his face went completely sheet-white.",
           "emotion": "shocked"
         }
-      ],
-      "cards": [
-        {
-          "from_line": "L1",
-          "to_line": "L1",
-          "duration_sec": 2.8,
-          "card": {
-            "type": "branded",
-            "theme": "dark",
-            "handle": "@motionsalt.stories",
-            "verified": true,
-            "emoji_row": ["😭", "💀", "⚖️"],
-            "title": "PART 1 | My uncle's lawyer asked why I brought wet wipes to the reading of his will.",
-            "likes": "142.8K",
-            "shares": "9.4K"
-          }
-        },
-        {
-          "from_line": "L6",
-          "to_line": "L8",
-          "card": {
-            "type": "comment",
-            "theme": "dark",
-            "username": "u/probate_watcher",
-            "age": "9h",
-            "verified": false,
-            "awards": [{ "type": "gold", "count": 1 }],
-            "body": "Showing up to a will reading already wearing the deceased man's watch tells you everything you need to know.",
-            "upvotes": "7.1K",
-            "show_footer": true
-          }
-        }
       ]
     },
     {
@@ -130,6 +114,22 @@
         "#fyp"
       ],
       "story_so_far": "The narrator presses a wet wipe onto the signature line of Trevor's notarized addendum, leaving the lawyer pale.",
+      "post": {
+        "theme": "dark",
+        "subreddit": "r/pettyrevenge",
+        "username": "u/watchmaker_nephew",
+        "age": "5h",
+        "awards": [
+          {
+            "type": "helpful",
+            "count": 1,
+            "label": "Smart"
+          }
+        ],
+        "nsfw": false,
+        "verified": true,
+        "title": "PART 2 | Fresh fountain ink bleeds under moisture—laser-printed forged signatures don't move a millimeter"
+      },
       "lines": [
         {
           "id": "L1",
@@ -191,42 +191,6 @@
           "id": "L12",
           "text": "Probate wrapped up two months later under Leo's original will, and I still keep that cheap packet of wet wipes right next to his fountain pen on my desk.",
           "emotion": "calm"
-        }
-      ],
-      "cards": [
-        {
-          "from_line": "L1",
-          "to_line": "L1",
-          "duration_sec": 2.8,
-          "card": {
-            "type": "branded",
-            "theme": "dark",
-            "handle": "@motionsalt.stories",
-            "verified": true,
-            "emoji_row": ["⚖️", "🖋️", "🔥"],
-            "title": "PART 2 | Fresh fountain ink bleeds under moisture—laser-printed forged signatures don't move a millimeter.",
-            "likes": "98.2K",
-            "shares": "6.1K"
-          }
-        },
-        {
-          "from_line": "L5",
-          "to_line": "L7",
-          "card": {
-            "type": "reply",
-            "theme": "dark",
-            "username": "u/fountain_ink_nerd",
-            "age": "5h",
-            "verified": true,
-            "awards": [{ "type": "helpful", "label": "Smart" }],
-            "body": "Water-based fountain ink vs. fused laser toner is an instant tell under any desk lamp.",
-            "reply": {
-              "username": "u/estate_paralegal",
-              "age": "4h",
-              "verified": false,
-              "body": "And grabbing at the document in front of two attorneys is basically a confession."
-            }
-          }
         }
       ]
     }

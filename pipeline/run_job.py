@@ -22,10 +22,67 @@ from background import (
     generate_test_pattern_background,
     prepare_background_clip,
 )
-from compose import compose_video, compute_card_windows
-from render_cards import render_cards_to_pngs
+from compose import compose_scrolling_video
+from render_cards import render_scrolling_post_assets
 from subtitles import generate_ass_subtitles
 from tts_engine import VoiceStudioCoupledSpeedupHook, get_tts_engine
+
+
+def migrate_legacy_production_json(doc: dict[str, Any]) -> dict[str, Any]:
+    """Normalize legacy v1 (cards timeline) production JSON to v2 (single post per part)."""
+    if not isinstance(doc, dict):
+        return doc
+    parts = doc.get("parts")
+    if not isinstance(parts, list):
+        return doc
+
+    out = json.loads(json.dumps(doc))
+    migrated_any = False
+    for part in out.get("parts", []):
+        if not isinstance(part, dict):
+            continue
+        if "post" not in part and isinstance(part.get("cards"), list) and part["cards"]:
+            migrated_any = True
+            cards = part["cards"]
+            picked = None
+            for item in cards:
+                c = item.get("card") if isinstance(item, dict) else None
+                if isinstance(c, dict) and c.get("type") in ("post", "branded"):
+                    picked = c
+                    break
+            if picked is None and isinstance(cards[0], dict):
+                picked = cards[0].get("card") if isinstance(cards[0].get("card"), dict) else {}
+            picked = picked or {}
+
+            post_obj: dict[str, Any] = {
+                "theme": "light" if picked.get("theme") == "light" else "dark",
+                "subreddit": str(picked.get("subreddit") or "r/stories"),
+                "username": str(picked.get("username") or picked.get("handle") or "u/storyteller"),
+                "title": str(picked.get("title") or part.get("title") or "Story"),
+            }
+            if picked.get("age"):
+                post_obj["age"] = str(picked["age"])
+            if isinstance(picked.get("awards"), list):
+                post_obj["awards"] = picked["awards"]
+            if "nsfw" in picked:
+                post_obj["nsfw"] = bool(picked["nsfw"])
+            if "verified" in picked:
+                post_obj["verified"] = bool(picked["verified"])
+            elif picked.get("type") == "branded":
+                post_obj["verified"] = True
+            if picked.get("upvotes"):
+                post_obj["upvotes"] = str(picked["upvotes"])
+            if picked.get("comments_count"):
+                post_obj["comments_count"] = str(picked["comments_count"])
+            if "show_footer" in picked:
+                post_obj["show_footer"] = bool(picked["show_footer"])
+
+            part["post"] = post_obj
+            part.pop("cards", None)
+
+    if migrated_any or ("schema_version" not in out and all(isinstance(p, dict) and "post" in p for p in out.get("parts", []))):
+        out["schema_version"] = 2
+    return out
 
 
 def worker_get_job(worker_url: str, job_id: str, secret: str) -> dict[str, Any]:
@@ -119,10 +176,12 @@ def render_all_parts(
     coupled_speedup_factor: float | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    production_json = migrate_legacy_production_json(production_json)
     from jsonschema import Draft202012Validator
     with open(os.path.join(root, "schema", "production.schema.json")) as schema_file:
         Draft202012Validator(json.load(schema_file)).validate(production_json)
     avatars_dir = os.path.join(root, "assets", "avatars")
+    avatar_cache_dir = os.path.join(work_dir, "avatars_cache")
     fonts_dir = os.path.join(root, "assets", "fonts")
     engine = get_tts_engine(tts_engine_name)
 
@@ -152,14 +211,14 @@ def render_all_parts(
         if coupled_speedup_factor and tts_engine_name != "edge":
             tts_res = VoiceStudioCoupledSpeedupHook.apply_coupled_speedup(tts_res, factor=coupled_speedup_factor)
 
-        # 2. Reddit cards -> transparent PNGs
-        card_pngs = render_cards_to_pngs(
-            part["cards"],
+        # 2. Persistent auto-scrolling Reddit post card assets
+        post_assets = render_scrolling_post_assets(
+            post=part["post"],
+            lines=part["lines"],
             out_dir=os.path.join(part_dir, "cards"),
             avatars_dir=avatars_dir,
-            seed=f"{job_id}-part{p_num}",
+            avatar_cache_dir=avatar_cache_dir,
         )
-        card_windows = compute_card_windows(part["cards"], tts_res.line_timings, tts_res.duration_sec)
 
         # 3. ASS subtitles
         ass_path = os.path.join(part_dir, "subtitles.ass")
@@ -191,13 +250,14 @@ def render_all_parts(
         # 5. Compose final MP4
         out_filename = f"{job_id}_part{p_num}.mp4"
         out_mp4 = os.path.join(part_dir, out_filename)
-        compose_video(
+        compose_scrolling_video(
             bg_video_path=prep_bg,
             audio_wav_path=tts_res.audio_path,
             ass_path=ass_path,
             fonts_dir=fonts_dir,
-            card_pngs=card_pngs,
-            card_windows=card_windows,
+            post_assets=post_assets,
+            word_timings=tts_res.word_timings,
+            line_timings=tts_res.line_timings,
             out_mp4_path=out_mp4,
             duration_sec=tts_res.duration_sec,
         )

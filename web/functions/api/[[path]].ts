@@ -13,9 +13,144 @@ interface Env {
 const VALID_EMOTIONS = new Set([
   "calm", "tense", "angry", "shocked", "sad", "sarcastic", "whisper", "excited"
 ]);
-const VALID_CARD_TYPES = new Set(["post", "comment", "reply", "branded"]);
 const VALID_THEMES = new Set(["dark", "light"]);
 const VALID_AWARD_TYPES = new Set(["gold", "helpful", "heart"]);
+
+function formatInstancePath(instancePath: string): string {
+  if (!instancePath) return "root";
+  const segs = instancePath.split("/").filter(Boolean);
+  let out = "";
+  for (const seg of segs) {
+    if (/^\d+$/.test(seg)) {
+      out += `[${seg}]`;
+    } else {
+      out += out ? `.${seg}` : seg;
+    }
+  }
+  return out || "root";
+}
+
+function unescapeMarkdownArtifacts(text: string): { result: string; changed: boolean } {
+  let changed = false;
+  const result = text.replace(/(\\+)([\[\]_*])/g, (full, slashes: string, ch: string) => {
+    if (slashes.length % 2 === 1) {
+      changed = true;
+      return slashes.slice(0, -1) + ch;
+    }
+    return full;
+  });
+  return { result, changed };
+}
+
+function repairJsonString(raw: string): { ok: true; parsed: any; repairs: string[] } | { ok: false; error: string } {
+  try {
+    return { ok: true, parsed: JSON.parse(raw), repairs: [] };
+  } catch {
+    // Fall through to deterministic repairs
+  }
+
+  const repairs: string[] = [];
+  let candidate = raw.trim();
+
+  // 1. Strip markdown code fence if present
+  const fenceMatch = candidate.match(/```(?:json|JSON)?\s*\r?\n?([\s\S]*?)\r?\n?```/);
+  if (fenceMatch && fenceMatch[1] && fenceMatch[1].includes("{")) {
+    candidate = fenceMatch[1].trim();
+    repairs.push("stripped markdown code fence");
+  }
+
+  // 2. Drop any text before the first '{' or after the last '}'
+  const firstBrace = candidate.indexOf("{");
+  const lastBrace = candidate.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    if (firstBrace > 0 || lastBrace < candidate.length - 1) {
+      candidate = candidate.slice(firstBrace, lastBrace + 1);
+      repairs.push("dropped text outside outer { ... }");
+    }
+  }
+
+  // 3. Remove stray markdown backslash escapes (\[, \], \_, \*)
+  const unescaped = unescapeMarkdownArtifacts(candidate);
+  if (unescaped.changed) {
+    candidate = unescaped.result;
+    repairs.push("removed stray markdown escapes (\\[, \\], \\_, \\*)");
+  }
+
+  try {
+    const parsed = JSON.parse(candidate);
+    return { ok: true, parsed, repairs };
+  } catch (e: any) {
+    return { ok: false, error: `Invalid JSON syntax: ${e?.message || "unable to parse JSON"}` };
+  }
+}
+
+function migrateProductionJson(doc: any): { doc: any; notices: string[] } {
+  if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
+    return { doc, notices: [] };
+  }
+  const notices: string[] = [];
+  const cloned = JSON.parse(JSON.stringify(doc));
+
+  if (Array.isArray(cloned.parts)) {
+    let migratedLegacy = false;
+    cloned.parts.forEach((part: any, pi: number) => {
+      if (!part || typeof part !== "object") return;
+      if (!part.post && Array.isArray(part.cards) && part.cards.length > 0) {
+        migratedLegacy = true;
+        const cards: any[] = part.cards;
+        let picked: any = null;
+        for (const item of cards) {
+          const c = item?.card;
+          if (c && (c.type === "post" || c.type === "branded")) {
+            picked = c;
+            break;
+          }
+        }
+        if (!picked) {
+          picked = cards[0]?.card || {};
+        }
+        const postObj: any = {
+          theme: picked.theme === "light" ? "light" : "dark",
+          subreddit: String(picked.subreddit || "r/stories"),
+          username: String(picked.username || picked.handle || "u/storyteller"),
+          title: String(picked.title || part.title || "Story"),
+        };
+        if (picked.age) postObj.age = String(picked.age);
+        if (Array.isArray(picked.awards)) postObj.awards = picked.awards;
+        if (typeof picked.nsfw === "boolean") postObj.nsfw = picked.nsfw;
+        if (typeof picked.verified === "boolean") {
+          postObj.verified = picked.verified;
+        } else if (picked.type === "branded") {
+          postObj.verified = true;
+        }
+        if (picked.upvotes) postObj.upvotes = String(picked.upvotes);
+        if (picked.comments_count) postObj.comments_count = String(picked.comments_count);
+        if (typeof picked.show_footer === "boolean") postObj.show_footer = picked.show_footer;
+
+        part.post = postObj;
+        const ignored = Math.max(0, cards.length - 1);
+        delete part.cards;
+        notices.push(
+          `Converted legacy "cards" timeline in Part ${pi + 1} to a v2 "post" using its first ${picked.type || "post"} card${ignored > 0 ? ` and ignored ${ignored} other card(s)` : ""}.`
+        );
+      }
+    });
+
+    if (
+      migratedLegacy ||
+      (cloned.schema_version === undefined &&
+        cloned.parts.length > 0 &&
+        cloned.parts.every((p: any) => p && typeof p === "object" && p.post))
+    ) {
+      cloned.schema_version = 2;
+      if (!migratedLegacy) {
+        notices.push('Added missing "schema_version": 2.');
+      }
+    }
+  }
+
+  return { doc: cloned, notices };
+}
 
 function jsonResp(data: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(data), {
@@ -74,11 +209,29 @@ export async function isAuthenticated(request: Request, env: Env): Promise<boole
 
 function validateProductionJson(doc: any): string[] {
   const errors: string[] = [];
-  if (!validateSchema(doc)) {
-    return (validateSchema.errors || []).map((e: any) => `${e.instancePath || "/"}: ${e.message}${e.params?.additionalProperty ? " (" + e.params.additionalProperty + ")" : ""}`);
-  }
   if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
     return ["Root value must be a JSON object."];
+  }
+  if ("$schema" in doc || "$defs" in doc || ("properties" in doc && !("parts" in doc))) {
+    errors.push("It looks like the AI echoed the JSON Schema itself instead of producing story data.");
+  }
+  if (!validateSchema(doc)) {
+    for (const e of (validateSchema.errors || []) as any[]) {
+      const p = formatInstancePath(e.instancePath || "");
+      if (e.keyword === "required" && e.params?.missingProperty) {
+        errors.push(`${p}: missing required field "${e.params.missingProperty}".`);
+      } else if (e.keyword === "additionalProperties" && e.params?.additionalProperty) {
+        errors.push(`${p}: unexpected field "${e.params.additionalProperty}".`);
+      } else if (e.keyword === "enum" && Array.isArray(e.params?.allowedValues)) {
+        errors.push(`${p}: must be one of ${e.params.allowedValues.join(", ")}.`);
+      } else {
+        errors.push(`${p}: ${e.message}`);
+      }
+    }
+    return errors;
+  }
+  if (doc.schema_version !== 2) {
+    errors.push("schema_version: must be 2.");
   }
   if (typeof doc.series_title !== "string" || doc.series_title.trim().length < 2) {
     errors.push("series_title: must be a non-empty string (at least 2 characters).");
@@ -99,14 +252,11 @@ function validateProductionJson(doc: any): string[] {
 
   doc.parts.forEach((part: any, pi: number) => {
     const p = `parts[${pi}]`;
-    if (part.part_number !== pi + 1) errors.push(`${p}.part_number: expected ${pi + 1}; parts must be in order.`);
     if (!part || typeof part !== "object") {
       errors.push(`${p}: must be an object.`);
       return;
     }
-    if (part.part_number !== 1 && part.part_number !== 2) {
-      errors.push(`${p}.part_number: must be 1 or 2.`);
-    }
+    if (part.part_number !== pi + 1) errors.push(`${p}.part_number: expected ${pi + 1}; parts must be in order.`);
     if (typeof part.title !== "string" || part.title.trim().length < 3) {
       errors.push(`${p}.title: must be a string (at least 3 characters).`);
     }
@@ -121,6 +271,29 @@ function validateProductionJson(doc: any): string[] {
     }
     if (typeof part.story_so_far !== "string") {
       errors.push(`${p}.story_so_far: must be a string.`);
+    }
+    if (!part.post || typeof part.post !== "object") {
+      errors.push(`${p}.post: missing required post object.`);
+    } else {
+      if (!VALID_THEMES.has(part.post.theme)) {
+        errors.push(`${p}.post.theme: must be "dark" or "light".`);
+      }
+      if (typeof part.post.subreddit !== "string" || !part.post.subreddit.trim()) {
+        errors.push(`${p}.post.subreddit: must be a non-empty string.`);
+      }
+      if (typeof part.post.username !== "string" || !part.post.username.trim()) {
+        errors.push(`${p}.post.username: must be a non-empty string.`);
+      }
+      if (typeof part.post.title !== "string" || !part.post.title.trim()) {
+        errors.push(`${p}.post.title: must be a non-empty string.`);
+      }
+      if (Array.isArray(part.post.awards)) {
+        part.post.awards.forEach((aw: any, ai: number) => {
+          if (!aw || !VALID_AWARD_TYPES.has(aw.type)) {
+            errors.push(`${p}.post.awards[${ai}].type: must be gold, helpful, or heart.`);
+          }
+        });
+      }
     }
 
     const lineIds = new Set<string>();
@@ -145,63 +318,6 @@ function validateProductionJson(doc: any): string[] {
         }
         if (!VALID_EMOTIONS.has(ln.emotion)) {
           errors.push(`${lp}.emotion: "${ln.emotion}" is invalid (allowed: ${Array.from(VALID_EMOTIONS).join(", ")}).`);
-        }
-      });
-    }
-
-    const order = new Map(part.lines.map((line: any, index: number) => [line.id, index]));
-    if (part.cards?.length) {
-      const first = part.cards[0];
-      if (first.from_line !== part.lines[0].id || !["post", "branded"].includes(first.card.type)) errors.push(`${p}.cards[0]: first card must be a post or branded hook starting on the first line.`);
-      let previousStart = -1;
-      for (const [ci, card] of part.cards.entries()) {
-        const start = Number(order.get(card.from_line));
-        const end = Number(order.get(card.to_line));
-        if (start > end) errors.push(`${p}.cards[${ci}]: from_line must not follow to_line.`);
-        if (start < previousStart) errors.push(`${p}.cards[${ci}]: cards must be ordered by narration line.`);
-        previousStart = start;
-      }
-    }
-    if (!Array.isArray(part.cards) || part.cards.length === 0) {
-      errors.push(`${p}.cards: must be a non-empty array of card timeline entries.`);
-    } else {
-      part.cards.forEach((c: any, ci: number) => {
-        const cp = `${p}.cards[${ci}]`;
-        if (!c || typeof c !== "object") {
-          errors.push(`${cp}: must be an object.`);
-          return;
-        }
-        if (typeof c.from_line !== "string" || (lineIds.size > 0 && !lineIds.has(c.from_line))) {
-          errors.push(`${cp}.from_line: "${c.from_line}" does not match any line id in ${p}.lines.`);
-        }
-        if (typeof c.to_line !== "string" || (lineIds.size > 0 && !lineIds.has(c.to_line))) {
-          errors.push(`${cp}.to_line: "${c.to_line}" does not match any line id in ${p}.lines.`);
-        }
-        if (!c.card || typeof c.card !== "object") {
-          errors.push(`${cp}.card: missing card object.`);
-          return;
-        }
-        if (!VALID_CARD_TYPES.has(c.card.type)) {
-          errors.push(`${cp}.card.type: must be one of post, comment, reply, branded.`);
-        }
-        if (!VALID_THEMES.has(c.card.theme)) {
-          errors.push(`${cp}.card.theme: must be "dark" or "light".`);
-        }
-        if ((c.card.type === "post" || c.card.type === "branded") && !c.card.title) {
-          errors.push(`${cp}.card.title: required for ${c.card.type} cards.`);
-        }
-        if ((c.card.type === "comment" || c.card.type === "reply") && !c.card.body) {
-          errors.push(`${cp}.card.body: required for ${c.card.type} cards.`);
-        }
-        if (c.card.type === "reply" && (!c.card.reply || !c.card.reply.username || !c.card.reply.body)) {
-          errors.push(`${cp}.card.reply: must include username and body for reply cards.`);
-        }
-        if (Array.isArray(c.card.awards)) {
-          c.card.awards.forEach((aw: any, ai: number) => {
-            if (!aw || !VALID_AWARD_TYPES.has(aw.type)) {
-              errors.push(`${cp}.card.awards[${ai}].type: must be gold, helpful, or heart.`);
-            }
-          });
         }
       });
     }
@@ -327,15 +443,27 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   if (path === "/api/validate" && request.method === "POST") {
     const body: any = await request.json().catch(() => null);
     let parsed = body?.production_json ?? body;
+    let repairs: string[] = [];
     if (typeof parsed === "string") {
-      try {
-        parsed = JSON.parse(parsed);
-      } catch (e: any) {
-        return jsonResp({ valid: false, errors: [`Invalid JSON syntax: ${e.message}`] }, 400);
+      const rep = repairJsonString(parsed);
+      if (!rep.ok) {
+        return jsonResp({ valid: false, errors: [rep.error], notices: [] }, 400);
       }
+      parsed = rep.parsed;
+      repairs = rep.repairs;
     }
-    const errors = validateProductionJson(parsed);
-    return jsonResp({ valid: errors.length === 0, errors }, errors.length === 0 ? 200 : 400);
+    const { doc: migrated, notices: migrationNotices } = migrateProductionJson(parsed);
+    const errors = validateProductionJson(migrated);
+    const notices = [...repairs, ...migrationNotices];
+    return jsonResp(
+      {
+        valid: errors.length === 0,
+        errors,
+        notices,
+        ...(errors.length === 0 ? { production_json: migrated } : {}),
+      },
+      errors.length === 0 ? 200 : 400
+    );
   }
 
   // Start render job
@@ -343,12 +471,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const body: any = await request.json().catch(() => ({}));
     let prod = body.production_json;
     if (typeof prod === "string") {
-      try {
-        prod = JSON.parse(prod);
-      } catch (e: any) {
-        return jsonResp({ error: `Invalid JSON syntax: ${e.message}` }, 400);
+      const rep = repairJsonString(prod);
+      if (!rep.ok) {
+        return jsonResp({ error: rep.error }, 400);
       }
+      prod = rep.parsed;
     }
+    const { doc: migrated } = migrateProductionJson(prod);
+    prod = migrated;
     const errors = validateProductionJson(prod);
     if (errors.length > 0) {
       return jsonResp({ error: "Validation failed", errors }, 400);

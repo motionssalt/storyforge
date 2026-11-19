@@ -1,4 +1,5 @@
 {
+  "schema_version": 2,
   "series_title": "Technical smoke test: The spare key",
   "format": "two_part",
   "parts": [
@@ -10,6 +11,15 @@
         "#storytime"
       ],
       "story_so_far": "A missing key leads to a surprise birthday cake.",
+      "post": {
+        "theme": "dark",
+        "subreddit": "r/fiction",
+        "username": "u/spare_key_story",
+        "age": "2h",
+        "nsfw": false,
+        "verified": false,
+        "title": "My neighbor returned my missing key."
+      },
       "lines": [
         {
           "id": "L1",
@@ -26,30 +36,6 @@
           "text": "I reached for the cupboard door, and someone knocked behind me.",
           "emotion": "calm"
         }
-      ],
-      "cards": [
-        {
-          "from_line": "L1",
-          "to_line": "L1",
-          "duration_sec": 2.8,
-          "card": {
-            "type": "post",
-            "theme": "dark",
-            "subreddit": "r/fiction",
-            "username": "u/spare_key_story",
-            "title": "My neighbor returned my missing key."
-          }
-        },
-        {
-          "from_line": "L2",
-          "to_line": "L3",
-          "card": {
-            "type": "comment",
-            "theme": "light",
-            "username": "u/hidden_cupboard",
-            "body": "Check the blue cupboard."
-          }
-        }
       ]
     },
     {
@@ -60,6 +46,15 @@
         "#storytime"
       ],
       "story_so_far": "A missing key leads to a surprise birthday cake.",
+      "post": {
+        "theme": "light",
+        "subreddit": "r/fiction",
+        "username": "u/spare_key_story",
+        "age": "1h",
+        "nsfw": false,
+        "verified": false,
+        "title": "The warning led to a birthday surprise."
+      },
       "lines": [
         {
           "id": "L1",
@@ -75,30 +70,6 @@
           "id": "L3",
           "text": "The warning was a joke, but I finally knew who had borrowed my spare key.",
           "emotion": "calm"
-        }
-      ],
-      "cards": [
-        {
-          "from_line": "L1",
-          "to_line": "L1",
-          "duration_sec": 2.8,
-          "card": {
-            "type": "post",
-            "theme": "dark",
-            "subreddit": "r/fiction",
-            "username": "u/spare_key_story",
-            "title": "The warning led to a birthday surprise."
-          }
-        },
-        {
-          "from_line": "L2",
-          "to_line": "L3",
-          "card": {
-            "type": "comment",
-            "theme": "light",
-            "username": "u/hidden_cupboard",
-            "body": "They remembered my birthday."
-          }
         }
       ]
     }

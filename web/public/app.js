@@ -136,6 +136,59 @@
     }
   });
 
+  function repairPastedJson(raw) {
+    try {
+      return { ok: true, parsed: JSON.parse(raw), repairs: [] };
+    } catch {
+      // Fall through to deterministic artifact repairs
+    }
+
+    const repairs = [];
+    let candidate = String(raw || "").trim();
+
+    const fenceMatch = candidate.match(/```(?:json|JSON)?\s*\r?\n?([\s\S]*?)\r?\n?```/);
+    if (fenceMatch && fenceMatch[1] && fenceMatch[1].includes("{")) {
+      candidate = fenceMatch[1].trim();
+      repairs.push("stripped markdown code fence");
+    }
+
+    const firstBrace = candidate.indexOf("{");
+    const lastBrace = candidate.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      if (firstBrace > 0 || lastBrace < candidate.length - 1) {
+        candidate = candidate.slice(firstBrace, lastBrace + 1);
+        repairs.push("removed surrounding non-JSON text");
+      }
+    }
+
+    let unescapedChanged = false;
+    candidate = candidate.replace(/(\\+)([\[\]_*])/g, (full, slashes, ch) => {
+      if (slashes.length % 2 === 1) {
+        unescapedChanged = true;
+        return slashes.slice(0, -1) + ch;
+      }
+      return full;
+    });
+    if (unescapedChanged) {
+      repairs.push("removed stray markdown escapes (\\[, \\], \\_, \\*)");
+    }
+
+    try {
+      const parsed = JSON.parse(candidate);
+      return { ok: true, parsed, repairs };
+    } catch (e) {
+      let contextHint = "";
+      const posMatch = String(e.message || "").match(/position\s+(\d+)/i);
+      if (posMatch) {
+        const pos = Number(posMatch[1]);
+        const start = Math.max(0, pos - 24);
+        const end = Math.min(candidate.length, pos + 24);
+        contextHint = ` Near: ${candidate.slice(start, end)}`;
+      }
+      return { ok: false, error: `${e.message}${contextHint}` };
+    }
+  }
+
   async function runValidation() {
     jsonStatus.innerHTML = "";
     const raw = jsonInput.value.trim();
@@ -143,29 +196,36 @@
       jsonStatus.innerHTML = '<div class="err">Paste a production JSON first.</div>';
       return null;
     }
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (e) {
-      jsonStatus.innerHTML = `<div class="err">JSON syntax error: ${escapeHtml(e.message)}</div>`;
+
+    const rep = repairPastedJson(raw);
+    if (!rep.ok) {
+      jsonStatus.innerHTML = `<div class="err">JSON syntax error (even after auto-repair): ${escapeHtml(rep.error)}</div>`;
       return null;
     }
+
     const r = await api("/api/validate", {
       method: "POST",
-      body: JSON.stringify({ production_json: parsed }),
+      body: JSON.stringify({ production_json: rep.parsed }),
     });
     if (!r.ok || !r.data.valid) {
       const errs = (r.data.errors || ["Validation failed"]).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
       jsonStatus.innerHTML = `<div class="err"><strong>Validation errors:</strong><ul>${errs}</ul></div>`;
       return null;
     }
-    const totalWords = (parsed.parts || []).reduce((acc, p) => {
+
+    const normalized = r.data.production_json || rep.parsed;
+    const allNotices = [...rep.repairs, ...(r.data.notices || [])];
+    const noticeHtml = allNotices.length
+      ? `<div class="muted" style="margin-top:6px;"><strong>Note:</strong> ${allNotices.map((n) => escapeHtml(n)).join("; ")}.</div>`
+      : "";
+
+    const totalWords = (normalized.parts || []).reduce((acc, p) => {
       return acc + (p.lines || []).reduce((la, l) => la + String(l.text || "").split(/\s+/).filter(Boolean).length, 0);
     }, 0);
     const wpm = Number(wpmInput.value) || 250;
     const estSec = Math.round((totalWords / wpm) * 60);
-    jsonStatus.innerHTML = `<div class="ok">Valid (${escapeHtml(parsed.format)}): "${escapeHtml(parsed.series_title)}" &mdash; ${parsed.parts.length} part(s), ${totalWords} words (~${estSec}s at ${wpm} WPM).</div>`;
-    return parsed;
+    jsonStatus.innerHTML = `<div class="ok">Valid v${escapeHtml(normalized.schema_version || 2)} (${escapeHtml(normalized.format)}): "${escapeHtml(normalized.series_title)}" &mdash; ${normalized.parts.length} part(s), ${totalWords} words (~${estSec}s at ${wpm} WPM).${noticeHtml}</div>`;
+    return normalized;
   }
 
   validateBtn.addEventListener("click", runValidation);
