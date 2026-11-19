@@ -1,6 +1,6 @@
 {
-  "verified_at": "2026-11-19T05:48:02.423424+00:00",
-  "scope": "Phase 1 technical smoke test only; gameplay integration remains blocked.",
+  "verified_at": "2026-11-19T06:32:13.220994+00:00",
+  "scope": "Phase 1 full end-to-end verification with real user-supplied gameplay backgrounds.",
   "vault": {
     "manifest_values": 35,
     "verified_bytes": 99023615,
@@ -94,5 +94,26 @@
     "authenticated_mp4_proxy": "Both complete downloads matched release assets byte-for-byte by SHA-256.",
     "reachable_history": "Clean orphan lineage found at start; no old branches/tags/releases. Common token-pattern scan and exact supplied-token scan passed before each push. Exact old commit SHA reachability until GitHub garbage collection remains a residual risk.",
     "password": "Stored only as Pages secret, delivered privately in final report; never committed."
+  },
+  "production_two_part_render": {
+    "job_id": "sf_mwn5yact_5b38c0",
+    "workflow_run_id": 44471719812,
+    "workflow_url": "https://github.com/motionssalt/storyforge/actions/runs/44471719812",
+    "input_example": "schema/examples/two-part-series.json",
+    "part1": {
+      "filename": "sf_mwn5yact_5b38c0_part1.mp4",
+      "duration_sec": 80.7,
+      "bytes": 34425041,
+      "background_clip": "bg_01_parkour_minimal.mp4"
+    },
+    "part2": {
+      "filename": "sf_mwn5yact_5b38c0_part2.mp4",
+      "duration_sec": 77.93,
+      "bytes": 47932552,
+      "background_clip": "bg_02_snowboard_steep.mp4"
+    },
+    "next_background_index_after_job": 2,
+    "anonymous_download_status": 401,
+    "eye_check": "Inspected 1080x1920 frames at 1.2s, 18.0s, 34.0s, 60.0s for both parts: distinct real gameplay backgrounds, crisp dark branded/comment/reply Reddit cards above subtitle safe zone, bold comic Lilita One subtitles with black outline and active yellow word highlight."
   }
 }
