@@ -1455,6 +1455,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const taskId = String(body.task_id || "").trim();
     if (!taskId) return jsonResp({ error: "Missing task_id" }, 400);
     const res = await cleanupPublishedTask(env, taskId);
+    if (!res.removed) return jsonResp({ error: "Cleanup requires a real, confirmed publish for every part and target account." }, 409);
     return jsonResp({ ok: true, ...res });
   }
 

@@ -13,7 +13,7 @@
     "8_round1_sf003_scrolling_post_and_v2_schema": "done_verified",
     "9_round1_sf001_copy_safe_agent_prompt_and_repair": "done_verified",
     "10_round1_sf002_seeded_avatars_and_load_guard": "done_verified",
-    "round2_settings_media": "implemented; local build passed"
+    "round2_settings_media": "verified locally"
   },
   "decisions": [
     "Stored private research vault (skill/, analysis/, data/, old BUILD_STATE.json, AGENT_PROMPT) in Cloudflare Workers KV namespace 'storyforge-vault' (contact sheets chunked into <= 4.5 MB zips under KV's 25 MiB per-value limit).",
@@ -40,7 +40,7 @@
     "SF-002: Seeded DiceBear v9 avataaars PNG resolution by canonicalized username (cached per job in avatars_cache/) with non-emoji bundled fallback and img.complete/naturalWidth/img.decode() readiness guard so avatars look like cartoon characters and stay identical across every part of a series."
   ],
   "blockers": [],
-  "next_action": "Smoke-check Settings and background media in a browser and deploy Pages; verify the production deployment.",
+  "next_action": "Redeploy Pages and the scheduled publishing Worker; verify public version, authentication gate and cron schedule.",
   "verification": {
     "vault": {
       "values_verified": 35,
@@ -107,10 +107,11 @@
     "Edge service remains an external dependency and may still reject requests after retry exhaustion."
   ],
   "round2_settings_media": {
-    "status": "implementation checkpoint",
+    "status": "local browser smoke passed; deployment pending",
     "decisions": [
       "Use existing protected narration audio samples; previews do not change the saved voice.",
-      "Store editable clip display metadata in D1 runtime_state; preserve the GitHub manifest, footage, source and original attribution on edits."
+      "Store editable clip display metadata in D1 runtime_state; preserve the GitHub manifest, footage, source and original attribution on edits.",
+      "Guard SF-007 cleanup against failed, skipped, unconfirmed, mock and dry-run tasks; preserve database records if GitHub asset deletion fails."
     ],
     "blockers": [
       "No Zernio key for live publishing verification.",
@@ -119,6 +120,10 @@
     "legacy_purge": {
       "performed": false,
       "count": 0
-    }
+    },
+    "verification": [
+      "Authenticated mobile-width Chromium played two existing narration samples, loaded three real Release thumbnails, played and sought actual Release video, verified 206/416 ranges, and confirmed D1 clip metadata and defaults survived reload.",
+      "The local cleanup route returned 409 for an inserted failed task and left the task intact."
+    ]
   }
 }

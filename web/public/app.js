@@ -752,7 +752,7 @@
     if (file.size > MAX_DIRECT_UPLOAD_BYTES) {
       showErr(
         bgUploadErr,
-        `File is ${fmtBytes(file.size)}, which exceeds Cloudflare's direct-upload limit (95 MB). Use URL / Google Drive import instead.`
+        `File is ${fmtBytes(file.size)}, which exceeds StoryForge's direct-upload limit (95 MiB). Use URL / Google Drive import instead.`
       );
       return;
     }
@@ -1067,7 +1067,7 @@
     let badgeCls = "badge";
     if (j.status === "done" || j.status === "published") badgeCls = "badge ok";
     else if (j.status === "failed" || j.status === "publish_failed") badgeCls = "badge err";
-    else if (j.status === "waiting_for_keys" || j.status === "publish_failed_partial") badgeCls = "badge warn";
+    else if (["waiting_for_keys", "publish_failed_partial", "publish_skipped", "publish_unconfirmed", "cleanup_pending"].includes(j.status)) badgeCls = "badge warn";
 
     const modeBits = [];
     if (j.kind === "render") {

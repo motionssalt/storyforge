@@ -97,6 +97,7 @@ async function fetchGitHubRenderAssetStream(
 async function deleteGitHubRenderAssetsForTask(env: Env, parts: TaskPartRow[]): Promise<string[]> {
   const repo = env.GITHUB_REPO || "motionssalt/storyforge";
   const deleted: string[] = [];
+  if (!parts.some((part) => part.asset_id || part.filename)) return deleted;
   const relRes = await fetch(`https://api.github.com/repos/${repo}/releases/tags/renders`, {
     headers: {
       Authorization: `Bearer ${env.GITHUB_TOKEN}`,
@@ -104,7 +105,8 @@ async function deleteGitHubRenderAssetsForTask(env: Env, parts: TaskPartRow[]): 
       "User-Agent": "StoryForge-Worker",
     },
   });
-  if (!relRes.ok) return deleted;
+  if (relRes.status === 404) return deleted;
+  if (!relRes.ok) throw new Error(`Renders release lookup failed (${relRes.status}).`);
   const rel: any = await relRes.json();
   const assets: any[] = rel.assets || [];
 
@@ -131,15 +133,22 @@ async function deleteGitHubRenderAssetsForTask(env: Env, parts: TaskPartRow[]): 
       });
       if (delRes.ok || delRes.status === 404) {
         deleted.push(String(a.name));
+      } else {
+        throw new Error(`Render asset deletion failed (${delRes.status}).`);
       }
     }
   }
   return deleted;
 }
 
-export async function cleanupPublishedTask(env: Env, taskId: string): Promise<{ deletedAssets: string[] }> {
+export async function cleanupPublishedTask(env: Env, taskId: string): Promise<{ deletedAssets: string[]; removed: boolean }> {
   const full = await getTaskFull(env.STORYFORGE_DB, taskId);
-  if (!full) return { deletedAssets: [] };
+  if (!full || (await getSettings(env.STORYFORGE_DB)).mock_mode || full.task.kind !== "render" || full.task.dry_run || full.task.mock_mode ||
+      !full.parts.length || !full.targets.length ||
+      full.parts.some((p) => p.render_status !== "done" || !full.targets.some((t) => t.part_number === p.part_number)) ||
+      full.targets.some((t) => t.status !== "published" || !t.published_at || !t.zernio_post_id)) {
+    return { deletedAssets: [], removed: false };
+  }
   const deletedAssets = await deleteGitHubRenderAssetsForTask(env, full.parts);
   await env.STORYFORGE_DB.batch([
     env.STORYFORGE_DB.prepare("DELETE FROM task_logs WHERE task_id = ?").bind(taskId),
@@ -152,7 +161,7 @@ export async function cleanupPublishedTask(env: Env, taskId: string): Promise<{ 
   } catch {
     /* ignore */
   }
-  return { deletedAssets };
+  return { deletedAssets, removed: true };
 }
 
 export async function initializePublishingForTask(env: Env, taskId: string): Promise<void> {
@@ -619,7 +628,7 @@ export async function processPublishingTick(env: Env): Promise<{ checked: number
 
       for (const target of batch) {
         const resPlat = byAcc.get(target.account_id);
-        const st = resPlat?.status || (resp.post.status === "published" ? "published" : "publishing");
+        const st = resPlat?.status || "publishing";
         if (st === "published") {
           const pubAt = resPlat?.publishedAt || resp.post.publishedAt || nowIso;
           const nextElig = addMinutesIso(pubAt, settings.part2_delay_minutes);
@@ -703,9 +712,9 @@ export async function processPublishingTick(env: Env): Promise<{ checked: number
   // 4. Recompute task/part statuses and run SF-007 cleanup for fully confirmed tasks
   const { results: activeTasks } = await db
     .prepare(
-      "SELECT task_id, dry_run, publish_mode FROM tasks WHERE kind = 'render' AND status IN ('queued_publish', 'scheduled', 'publishing', 'publish_failed_partial', 'publish_failed')"
+      "SELECT task_id, dry_run, mock_mode, publish_mode FROM tasks WHERE kind = 'render' AND status IN ('queued_publish', 'scheduled', 'publishing', 'publish_failed_partial', 'publish_failed', 'cleanup_pending')"
     )
-    .all<{ task_id: string; dry_run: number; publish_mode: string }>();
+    .all<{ task_id: string; dry_run: number; mock_mode: number; publish_mode: string }>();
 
   let checked = 0;
   let cleaned = 0;
@@ -750,19 +759,21 @@ export async function processPublishingTick(env: Env): Promise<{ checked: number
     );
     const anyFailed = targets.some((x) => x.status === "failed");
     const anyPublished = targets.some((x) => x.status === "published");
-    const allDoneAndConfirmed =
-      targets.length > 0 &&
-      targets.every((x) => x.status === "published" || x.status === "skipped");
+    const allResolved = targets.length > 0 && targets.every((x) => x.status === "published" || x.status === "skipped");
 
-    if (allDoneAndConfirmed) {
-      await db
-        .prepare("UPDATE tasks SET status = 'published', current_stage = 'published', updated_at = ? WHERE task_id = ?")
-        .bind(nowIso, row.task_id)
-        .run();
-      if (row.dry_run === 0) {
-        await cleanupPublishedTask(env, row.task_id);
-        cleaned++;
+    if (allResolved) {
+      let status = targets.some((x) => x.status === "skipped") ? "publish_skipped" : "published";
+      if (status === "published" && !row.dry_run && !row.mock_mode && !adapter.isMock) {
+        try {
+          if ((await cleanupPublishedTask(env, row.task_id)).removed) { cleaned++; continue; }
+          status = "publish_unconfirmed";
+        } catch (e) {
+          console.error(`Cleanup of ${row.task_id} will retry:`, e);
+          status = "cleanup_pending";
+        }
       }
+      await db.prepare("UPDATE tasks SET status = ?, current_stage = ?, updated_at = ? WHERE task_id = ?")
+        .bind(status, status, nowIso, row.task_id).run();
     } else if (anyPendingOrActive) {
       const anyStarted = targets.some((x) => ["published", "publishing", "uploading", "processing"].includes(x.status));
       const st = anyStarted
