@@ -1,7 +1,7 @@
 {
   "project": "storyforge",
-  "phase": "Round 3 in progress: SF-011 and SF-009 fixed and verified; next SF-010",
-  "updated_at": "2026-11-19T15:31:00Z",
+  "phase": "Round 3 complete: SF-011, SF-009, and SF-010 fixed, verified, committed, and deployed",
+  "updated_at": "2026-11-19T15:42:00Z",
   "phases": {
     "1_vault_migration_and_repo_sanitization": "done",
     "2_schema_and_agent_prompt": "done",
@@ -14,9 +14,9 @@
     "9_round1_sf001_copy_safe_agent_prompt_and_repair": "done_verified",
     "10_round1_sf002_seeded_avatars_and_load_guard": "done_verified",
     "round2_settings_media": "deployed; local authenticated browser passed and live public checks passed",
-    "11_round3_sf011_prompt_idea_insertion": "done_local_verified_pending_deploy",
+    "11_round3_sf011_prompt_idea_insertion": "done_deployed_verified",
     "12_round3_sf009_card_shadow_clipping": "done_eye_checked_verified",
-    "13_round3_sf010_delete_any_task": "pending"
+    "13_round3_sf010_delete_any_task": "done_deployed_verified"
   },
   "decisions": [
     "Stored private research vault (skill/, analysis/, data/, old BUILD_STATE.json, AGENT_PROMPT) in Cloudflare Workers KV namespace 'storyforge-vault' (contact sheets chunked into <= 4.5 MB zips under KV's 25 MiB per-value limit).",
@@ -40,10 +40,13 @@
     "SF-003: Replaced v1 per-part cards timeline with schema_version 2 single post object per part; preserved legacy comment/reply/branded code in render_cards.py and added tolerant v1->v2 migration with notices in web and pipeline.",
     "SF-003: Implemented single-pass tall-body Chromium rendering (card_shell.png + body_dim.png + body_bright.png) paired with Pillow bilinear affine scrolling synced monotonically to Whisper/Edge word timestamps via compute_scroll_curve and piped as raw rgb24 overlay frames into FFmpeg.",
     "SF-001: Rewrote vault:agent_prompt in KV to request a single fenced ```json code block with nothing before/after, plain-words field guide plus one concrete v2 example (The Numbered Parcel Slip), zero formal JSON Schema, and anti-escape rules; added client + Worker deterministic repair (fence strip, outer brace trim, markdown backslash unescaping) and schema-echo error detection.",
-    "SF-002: Seeded DiceBear v9 avataaars PNG resolution by canonicalized username (cached per job in avatars_cache/) with non-emoji bundled fallback and img.complete/naturalWidth/img.decode() readiness guard so avatars look like cartoon characters and stay identical across every part of a series."
+    "SF-002: Seeded DiceBear v9 avataaars PNG resolution by canonicalized username (cached per job in avatars_cache/) with non-emoji bundled fallback and img.complete/naturalWidth/img.decode() readiness guard so avatars look like cartoon characters and stay identical across every part of a series.",
+    "SF-011: Root cause was placeholder mismatch — vault:agent_prompt in KV uses {{IDEA}} and {{TARGET_WORDS_90S}}, while /api/prompt only replaced {{STORY_IDEA}} and {{TARGET_WPM}} using raw String.replace (which also mangles $&/$1). Added web/shared/prompt.ts with function replacers supporting {{IDEA}}/{{STORY_IDEA}}, {{TARGET_WPM}}, and {{TARGET_WORDS_90S}}, strict error when no idea marker exists, and exact text preservation.",
+    "SF-009: Root cause was #stage padding-bottom: 60px in pipeline/render_cards.py clipping the 0 28px 64px box-shadow (alpha was still 23/255 at the 60px cut line in dark theme). Increased #stage padding to 80px 110px 160px 110px (and legacy template to 80px 135px 160px 135px) and shifted default stage_screen_y from 65 to 35 so the card stays at y=115px while all four outer edges fade cleanly to alpha 0.",
+    "SF-010: Added state-aware Delete button and plain in-page confirmation modal on every task card, backed by POST /api/tasks/delete (and DELETE /api/tasks). Uses D1 runtime_state tombstones (deleted_task:<id>) to guarantee non-resurrection against late workflow/log/status callbacks and cron ticks, cancels active GitHub Actions runs via stored task_run:<id> or workflow run-name matching, cancels not-yet-live Zernio posts via DELETE /v1/posts/{id} while reporting already-live posts, deletes renders Release assets by ID/filename/prefix without ever touching shared resources, and preserves delete_failed status for idempotent retry on partial failure."
   ],
   "blockers": [],
-  "next_action": "In the authenticated production site, smoke-check Settings media and run a disposable render/import. Use docs/ZERNIO_FIRST_LIVE_TEST.md when a key is available. Verify per-account confirmation and deletion before inventorying idle legacy tasks by ID/title/date and purging only the verified set.",
+  "next_action": "Log into https://storyforge-sfb.pages.dev to test Generate Prompt with an idea, delete any unwanted tasks from the queue, and run a render to confirm the full unclipped bottom drop-shadow in a real MP4.",
   "verification": {
     "vault": {
       "values_verified": 35,
@@ -142,5 +145,25 @@
       "Fresh render/import workflow, live real publishing and actual deletion after confirmation, vault prompt contents, and account-level daily quota usage were not rerun or inspected in this follow-up."
     ],
     "direct_upload_limit_bytes": 99614720
+  },
+  "round3_fixes": {
+    "status": "deployed",
+    "issues": {
+      "SF-011": "Fixed {{IDEA}} + {{TARGET_WORDS_90S}} replacement, function replacer for $&/$1 safety, loud error on missing marker, and stale output clearing on empty/error. Tested against live KV template with plain, multi-line/$&/quotes/emoji, long, empty, missing-marker, and multi-marker cases.",
+      "SF-009": "Expanded #stage transparent padding (top 80px, bottom 160px) and adjusted default stage_screen_y from 65 to 35 so card stays at y=115px. Verified alpha=0 on all 4 outer edges in Chromium and eye-checked FFmpeg composites of dark and light cards over both bright and dark backgrounds.",
+      "SF-010": "Added state-aware Delete + confirmation modal for all task states, workflow run cancellation (via task_run:<id> and run-name), Zernio DELETE /v1/posts/{id} for not-yet-live posts, already-live reporting, renders Release cleanup, partial-failure retry, idempotent double-tap handling, and D1 tombstone non-resurrection guards. Verified all states, partial-failure retry, double-tap, and late callback rejection against in-memory SQLite D1 + mocked GitHub/Zernio."
+    },
+    "deployment": {
+      "site": "https://storyforge-sfb.pages.dev",
+      "deployment": "https://507d53c4.storyforge-sfb.pages.dev",
+      "scheduled_worker": "https://storyforge-cron.motionssalt.workers.dev",
+      "worker_version": "b106fbd7-0522-425e-8727-d3fdb355ce62",
+      "cron": "* * * * *"
+    },
+    "not_tested_live": [
+      "Authenticated production UI actions on storyforge-sfb.pages.dev (site AUTH_PASSWORD is stored only in Pages secrets).",
+      "Live Zernio DELETE /v1/posts/{id} against a real Zernio account (no live Zernio API key configured).",
+      "Full GitHub Actions MP4 render run after SF-009 (Chromium + FFmpeg frame compositing was verified locally)."
+    ]
   }
 }
