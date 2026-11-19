@@ -247,31 +247,46 @@ class EdgeTTSEngine:
             if not clean_text:
                 continue
 
-            dr, dp = EMOTION_EDGE_TWEAKS.get(emotion, (0, 0))
+            dr, _ = EMOTION_EDGE_TWEAKS.get(emotion, (0, 0))
             eff_rate = format_rate(base_rate_pct + dr)
-            eff_pitch = format_pitch(dp)
 
             mp3_path = os.path.join(out_dir, f"line_{idx:03d}_{lid}.mp3")
             wav_path = os.path.join(out_dir, f"line_{idx:03d}_{lid}.wav")
 
-            kwargs: dict[str, Any] = {"rate": eff_rate, "pitch": eff_pitch}
-            if supports_boundary_kw:
-                kwargs["boundary"] = "WordBoundary"
-
-            comm = edge_tts.Communicate(clean_text, voice_id, **kwargs)
-
             line_wb: list[tuple[str, float, float]] = []
-            with open(mp3_path, "wb") as f:
-                async for chunk in comm.stream():
-                    ctype = chunk.get("type")
-                    if ctype == "audio":
-                        f.write(chunk["data"])
-                    elif ctype == "WordBoundary":
-                        offset_s = float(chunk["offset"]) / 10_000_000.0
-                        dur_s = float(chunk["duration"]) / 10_000_000.0
-                        w_txt = str(chunk.get("text", "")).strip()
-                        if w_txt:
-                            line_wb.append((w_txt, offset_s, offset_s + dur_s))
+            last_exc: Exception | None = None
+            attempts = []
+            if supports_boundary_kw:
+                attempts.append({"rate": eff_rate, "boundary": "WordBoundary"})
+            attempts.append({"rate": eff_rate})
+            attempts.append({"rate": eff_rate})
+
+            for attempt_idx, kwargs in enumerate(attempts):
+                line_wb = []
+                try:
+                    comm = edge_tts.Communicate(clean_text, voice_id, **kwargs)
+                    audio_bytes = 0
+                    with open(mp3_path, "wb") as f:
+                        async for chunk in comm.stream():
+                            ctype = chunk.get("type")
+                            if ctype == "audio":
+                                f.write(chunk["data"])
+                                audio_bytes += len(chunk["data"])
+                            elif ctype == "WordBoundary":
+                                offset_s = float(chunk["offset"]) / 10_000_000.0
+                                dur_s = float(chunk["duration"]) / 10_000_000.0
+                                w_txt = str(chunk.get("text", "")).strip()
+                                if w_txt:
+                                    line_wb.append((w_txt, offset_s, offset_s + dur_s))
+                    if audio_bytes > 0:
+                        last_exc = None
+                        break
+                except Exception as exc:
+                    last_exc = exc
+                    print(f"[tts] Attempt {attempt_idx+1} failed for {lid} ({kwargs}): {exc}")
+                    await asyncio.sleep(1.0)
+            if last_exc is not None:
+                raise last_exc
 
             # Convert to standard 44.1kHz mono PCM WAV
             subprocess.run(
