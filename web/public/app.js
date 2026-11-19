@@ -28,8 +28,7 @@
   const validateBtn = document.getElementById("validateBtn");
   const jsonStatus = document.getElementById("jsonStatus");
 
-  const samplePlayer = document.getElementById("samplePlayer");
-  const voiceList = document.getElementById("voiceList");
+  const voiceSelect = document.getElementById("voiceSelect");
   const speedInput = document.getElementById("speedInput");
   const bgSelect = document.getElementById("bgSelect");
   const manualBgWrap = document.getElementById("manualBgWrap");
@@ -86,6 +85,8 @@
   const bgMgrStatus = document.getElementById("bgMgrStatus");
   const bgImportTasksWrap = document.getElementById("bgImportTasksWrap");
   const bgPreviewWrap = document.getElementById("bgPreviewWrap");
+  const bgPreviewErr = document.getElementById("bgPreviewErr");
+  const bgFilter = document.getElementById("bgFilter");
   const bgPreviewTitle = document.getElementById("bgPreviewTitle");
   const bgPreviewVideo = document.getElementById("bgPreviewVideo");
   const bgPreviewCloseBtn = document.getElementById("bgPreviewCloseBtn");
@@ -108,6 +109,8 @@
   let selectedVoiceId = "";
   let voiceOverridden = false;
   let bgOverridden = false;
+  let bgDefaultsDirty = false;
+  setDefaultBg.addEventListener("change", () => { bgDefaultsDirty = true; });
   let speedOverridden = false;
   let pollTimer = null;
 
@@ -115,7 +118,9 @@
   const logCache = new Map();
   const openLogs = new Set();
   const deleteConfirmBg = new Set();
-  let lastSeenBgImportDoneCount = -1;
+  let lastSeenBgImportDoneId = null;
+  let backgroundsRequest = 0;
+  let editingBackground = null;
 
   function escapeHtml(s) {
     return String(s ?? "")
@@ -185,6 +190,8 @@
 
   function switchTab(tab) {
     activeTab = tab;
+    stopNarration();
+    closeBackgroundPreview();
     createView.classList.toggle("hidden", tab !== "create");
     settingsView.classList.toggle("hidden", tab !== "settings");
     tabCreateBtn.className = tab === "create" ? "active-tab" : "secondary";
@@ -219,6 +226,9 @@
       applyDefaultsToCreateScreen();
       await loadJobs();
     } else {
+      stopNarration();
+      closeBackgroundPreview();
+      if (editingBackground) closeBackgroundEditor();
       loginView.classList.remove("hidden");
       createView.classList.add("hidden");
       settingsView.classList.add("hidden");
@@ -253,47 +263,61 @@
     const res = await fetch("/voices.json");
     const cfg = await res.json();
     voices = cfg.voices || [];
-    setDefaultVoice.innerHTML = voices
-      .map((v) => `<option value="${escapeHtml(v.id)}">${escapeHtml(v.name)} (${escapeHtml(v.gender)})</option>`)
-      .join("");
-    if (voices.length && !selectedVoiceId) {
-      selectedVoiceId = voices[0].id;
+    const options = voices.map((v) =>
+      `<option value="${escapeHtml(v.id)}">${escapeHtml(v.name)} (${escapeHtml(v.gender)})</option>`
+    ).join("");
+    voiceSelect.innerHTML = setDefaultVoice.innerHTML = options;
+    if (voices.length && !selectedVoiceId) selectedVoiceId = voices[0].id;
+  }
+
+  const players = Array.from(document.querySelectorAll("[data-narration]")).map((wrap) => {
+    const select = wrap.dataset.narration === "settings" ? setDefaultVoice : voiceSelect;
+    wrap.innerHTML = `<div class="row">
+      <button class="secondary" type="button" data-sample="neutral">Play neutral</button>
+      <button class="secondary" type="button" data-sample="emotional">Play dramatic</button>
+    </div><div class="muted" role="status"></div><audio class="hidden" controls preload="none" aria-label="Narration sample"></audio>`;
+    const audio = wrap.querySelector("audio");
+    const status = wrap.querySelector('[role="status"]');
+    select.addEventListener("change", () => stopNarration());
+    audio.addEventListener("error", () => {
+      if (audio.hasAttribute("src")) status.textContent = "Couldn't load this narration sample.";
+    });
+    wrap.querySelectorAll("[data-sample]").forEach((button) => button.addEventListener("click", () => {
+      const voice = voices.find((v) => v.id === select.value);
+      if (!voice) { status.textContent = "Choose a narrator first."; return; }
+      stopNarration();
+      closeBackgroundPreview();
+      const kind = button.dataset.sample;
+      const src = voice[`sample_${kind}`] || `/samples/${encodeURIComponent(voice.id)}_${kind}.mp3`;
+      audio.src = src;
+      status.textContent = `${voice.name} · ${kind === "neutral" ? "Neutral" : "Dramatic"} sample`;
+      audio.classList.remove("hidden");
+      audio.play().catch((err) => {
+        if (err.name !== "AbortError" && audio.getAttribute("src") === src && !audio.error) {
+          status.textContent = "Use the audio player's play button to start the sample.";
+        }
+      });
+    }));
+    return { audio, status };
+  });
+
+  function stopNarration() {
+    for (const { audio, status } of players) {
+      if (!audio.hasAttribute("src")) continue;
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+      hideEl(audio);
+      status.textContent = "";
     }
   }
 
-  function renderVoices() {
-    voiceList.innerHTML = "";
-    voices.forEach((v) => {
-      const div = document.createElement("div");
-      div.className = "voice-item" + (v.id === selectedVoiceId ? " selected" : "");
-      div.innerHTML = `
-        <label style="margin:0; font-weight:normal; cursor:pointer; flex:1 1 260px;">
-          <input type="radio" name="voicePick" value="${escapeHtml(v.id)}" ${v.id === selectedVoiceId ? "checked" : ""} />
-          <strong>${escapeHtml(v.name)}</strong> (${escapeHtml(v.gender)}, ${escapeHtml(v.default_rate)})
-          <div class="muted">${escapeHtml(v.description)}</div>
-        </label>
-        <div class="row" style="margin-top:0;">
-          <button type="button" class="secondary play-btn" data-src="${escapeHtml(v.sample_neutral || `/samples/${v.id}_neutral.mp3`)}">Play neutral</button>
-          <button type="button" class="secondary play-btn" data-src="${escapeHtml(v.sample_emotional || `/samples/${v.id}_emotional.mp3`)}">Play dramatic text</button>
-        </div>
-      `;
-      div.querySelector('input[type="radio"]').addEventListener("change", () => {
-        selectedVoiceId = v.id;
-        voiceOverridden = true;
-        speedOverridden = false;
-        updateCalibratedRate();
-        renderVoices();
-      });
-      div.querySelectorAll(".play-btn").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          samplePlayer.src = btn.dataset.src;
-          samplePlayer.classList.remove("hidden");
-          samplePlayer.play().catch(() => {});
-        });
-      });
-      voiceList.appendChild(div);
-    });
-  }
+  voiceSelect.addEventListener("change", () => {
+    selectedVoiceId = voiceSelect.value;
+    voiceOverridden = true;
+    speedOverridden = false;
+    updateCalibratedRate();
+  });
 
   // --- SF-006: Settings ---
   async function loadSettings() {
@@ -301,7 +325,7 @@
     if (!r.ok || !r.data.settings) return;
     settings = r.data.settings;
     setDefaultVoice.value = settings.default_voice_id || (voices[0]?.id ?? "");
-    setDefaultBg.value = settings.default_background || "sequential";
+    if (!bgDefaultsDirty) setDefaultBg.value = settings.default_background || "sequential";
     setCadenceCount.value = String(settings.queue_cadence_count ?? 3);
     setCadenceUnit.value = settings.queue_cadence_unit || "day";
     setPart2Delay.value = String(settings.part2_delay_minutes ?? 20);
@@ -314,7 +338,7 @@
     if (!voiceOverridden && settings.default_voice_id && voices.some((v) => v.id === settings.default_voice_id)) {
       selectedVoiceId = settings.default_voice_id;
     }
-    renderVoices();
+    voiceSelect.value = selectedVoiceId;
     updateCalibratedRate();
     if (!bgOverridden) {
       const defBg = settings.default_background || "sequential";
@@ -362,6 +386,8 @@
       voiceOverridden = false;
       bgOverridden = false;
       applyDefaultsToCreateScreen();
+      bgDefaultsDirty = false;
+      renderBackgroundLibrary();
       settingsStatus.textContent = "Saved!";
     } finally {
       saveSettingsBtn.disabled = false;
@@ -513,8 +539,14 @@
 
   // --- SF-008: Background Video Manager ---
   async function loadBackgrounds() {
+    const requestId = ++backgroundsRequest;
     const r = await api("/api/backgrounds");
-    if (!r.ok) return;
+    if (requestId !== backgroundsRequest) return;
+    if (!r.ok) {
+      bgMgrStatus.textContent = r.data.error || "Couldn't load the background library. Try Refresh library.";
+      if (!bgClips.length) bgLibraryGrid.textContent = "Library unavailable.";
+      return;
+    }
     bgClips = r.data.clips || [];
     nextBgHint.textContent = `Next sequential background clip #${r.data.next_background_index ?? 0}`;
 
@@ -523,7 +555,8 @@
     const prevSetVal = setDefaultBg.value;
 
     const clipOpts = bgClips
-      .map((c, idx) => `<option value="${escapeHtml(c.filename)}">Clip #${idx}: ${escapeHtml(c.title || c.filename)} (${escapeHtml(c.filename)})</option>`)
+      .filter((c) => c.asset_exists !== false && !c.unlisted)
+      .map((c) => `<option value="${escapeHtml(c.filename)}">${escapeHtml(c.title || c.filename)}</option>`)
       .join("");
 
     bgSelect.innerHTML =
@@ -536,13 +569,14 @@
 
     if (bgOverridden && Array.from(bgSelect.options).some((o) => o.value === prevCreateVal)) {
       bgSelect.value = prevCreateVal;
-    } else if (!bgOverridden) {
+    } else {
+      bgOverridden = false;
       const defBg = settings.default_background || "sequential";
       bgSelect.value = Array.from(bgSelect.options).some((o) => o.value === defBg) ? defBg : "sequential";
     }
     manualBgWrap.classList.toggle("hidden", bgSelect.value !== "manual");
 
-    const wantedSetBg = settings.default_background || prevSetVal || "sequential";
+    const wantedSetBg = (bgDefaultsDirty ? prevSetVal : settings.default_background) || "sequential";
     setDefaultBg.value = Array.from(setDefaultBg.options).some((o) => o.value === wantedSetBg)
       ? wantedSetBg
       : "sequential";
@@ -551,106 +585,161 @@
   }
 
   function renderBackgroundLibrary() {
-    if (!bgClips.length) {
-      bgLibraryGrid.innerHTML = '<div class="muted">No background clips in library yet.</div>';
+    // Don't destroy an open form when the jobs poll refreshes the clip list.
+    if (editingBackground) return;
+    const query = bgFilter.value.trim().toLowerCase();
+    const clips = bgClips.filter((c) => [c.title, c.filename, c.note].some((v) => String(v || "").toLowerCase().includes(query)));
+    if (!clips.length) {
+      bgLibraryGrid.textContent = bgClips.length ? "No clips match your search." : "No background clips in library yet.";
       return;
     }
-    bgLibraryGrid.innerHTML = bgClips
-      .map((c, idx) => {
-        const isDefault = settings.default_background === c.filename;
-        const isConfirming = deleteConfirmBg.has(c.filename);
-        const thumbHtml = c.thumbnail
-          ? `<img class="bg-thumb" src="/api/backgrounds/thumb?file=${encodeURIComponent(c.thumbnail)}" alt="${escapeHtml(c.title || c.filename)}" loading="lazy" />`
-          : `<div class="bg-thumb" style="display:flex; align-items:center; justify-content:center; color:#a1a1aa; font-size:12px;">No thumbnail (click Normalize Existing)</div>`;
-        const metaParts = [];
-        if (c.duration_sec) metaParts.push(`${Math.round(c.duration_sec)}s`);
-        if (c.width && c.height) metaParts.push(`${c.width}x${c.height}`);
-        if (c.size_bytes) metaParts.push(fmtBytes(c.size_bytes));
-        const delBtns = isConfirming
-          ? `<button type="button" class="danger confirm-del-bg" data-file="${escapeHtml(c.filename)}">Confirm delete?</button>
-             <button type="button" class="secondary cancel-del-bg" data-file="${escapeHtml(c.filename)}">Cancel</button>`
-          : `<button type="button" class="danger start-del-bg" data-file="${escapeHtml(c.filename)}">Delete</button>`;
-        return `
-          <div class="bg-card">
-            ${thumbHtml}
-            <div><strong>#${idx}: ${escapeHtml(c.title || c.filename)}</strong> ${isDefault ? '<span class="badge ok">Default</span>' : ""}</div>
-            <div class="mono muted">${escapeHtml(c.filename)}</div>
-            <div class="muted">${escapeHtml(metaParts.join(" · "))}</div>
-            ${c.note ? `<div class="muted">${escapeHtml(c.note)}</div>` : ""}
-            <div class="row" style="margin-top:4px;">
-              <button type="button" class="secondary preview-bg-btn" data-file="${escapeHtml(c.filename)}" data-title="${escapeHtml(c.title || c.filename)}">Preview</button>
-              <button type="button" class="secondary default-bg-btn" data-file="${escapeHtml(c.filename)}" ${isDefault ? "disabled" : ""}>Set default</button>
-              ${delBtns}
-            </div>
+    bgLibraryGrid.innerHTML = clips.map((c) => {
+      const isDefault = settings.default_background === c.filename;
+      const confirming = deleteConfirmBg.has(c.filename);
+      const thumb = c.thumbnail
+        ? `<img class="bg-thumb" src="/api/backgrounds/thumb?file=${encodeURIComponent(c.thumbnail)}" alt="" loading="lazy" />`
+        : `<div class="bg-thumb muted" style="display:grid;place-items:center;color:white;">No thumbnail</div>`;
+      const meta = [c.duration_sec ? `${Math.round(c.duration_sec)} s` : "", c.size_bytes ? fmtBytes(c.size_bytes) : ""].filter(Boolean);
+      return `<article class="bg-card" data-file="${escapeHtml(c.filename)}">
+        ${thumb}
+        <div><strong>${escapeHtml(c.title || c.filename)}</strong> ${isDefault ? '<span class="badge ok">Default</span>' : ""}</div>
+        <div class="muted">${escapeHtml(meta.join(" · "))}${c.unlisted ? " · Not in rotation" : ""}</div>
+        ${c.note ? `<div class="muted">${escapeHtml(c.note)}</div>` : ""}
+        <div class="row">
+          <button type="button" class="secondary" data-action="preview" ${c.asset_exists === false ? "disabled" : ""}>Preview</button>
+          <button type="button" class="secondary" data-action="edit">Edit details</button>
+        </div>
+        <details ${confirming ? "open" : ""}>
+          <summary class="muted">Manage</summary>
+          <div class="muted">${escapeHtml(c.filename)}</div>
+          ${[c.attribution, c.additional_credit].filter(Boolean).map((credit) => `<div class="muted">Credit: ${escapeHtml(credit)}</div>`).join("")}
+          <div class="row">
+            <button type="button" class="secondary" data-action="default" ${isDefault || c.asset_exists === false || c.unlisted ? "disabled" : ""}>Set default</button>
+            ${confirming ? `<button type="button" class="danger" data-action="confirm-delete">Confirm delete</button>
+              <button type="button" class="secondary" data-action="cancel-delete">Cancel</button>`
+            : `<button type="button" class="danger" data-action="delete">Delete</button>`}
           </div>
-        `;
-      })
-      .join("");
-
-    bgLibraryGrid.querySelectorAll(".preview-bg-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const file = btn.dataset.file;
-        bgPreviewTitle.textContent = `Preview: ${btn.dataset.title || file}`;
-        bgPreviewVideo.src = `/api/backgrounds/stream?file=${encodeURIComponent(file)}`;
-        bgPreviewWrap.classList.remove("hidden");
-        bgPreviewVideo.play().catch(() => {});
-      });
-    });
-
-    bgLibraryGrid.querySelectorAll(".default-bg-btn").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const file = btn.dataset.file;
-        const r = await api("/api/settings", {
-          method: "PUT",
-          body: JSON.stringify({ default_background: file }),
-        });
-        if (r.ok) {
-          settings = r.data.settings;
-          bgOverridden = false;
-          await loadSettings();
-          await loadBackgrounds();
-          applyDefaultsToCreateScreen();
-        }
-      });
-    });
-
-    bgLibraryGrid.querySelectorAll(".start-del-bg").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        deleteConfirmBg.add(btn.dataset.file);
-        renderBackgroundLibrary();
-      });
-    });
-
-    bgLibraryGrid.querySelectorAll(".cancel-del-bg").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        deleteConfirmBg.delete(btn.dataset.file);
-        renderBackgroundLibrary();
-      });
-    });
-
-    bgLibraryGrid.querySelectorAll(".confirm-del-bg").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const file = btn.dataset.file;
-        btn.disabled = true;
-        bgMgrStatus.textContent = `Deleting ${file}...`;
-        const r = await api(`/api/backgrounds?filename=${encodeURIComponent(file)}`, { method: "DELETE" });
-        deleteConfirmBg.delete(file);
-        if (!r.ok) {
-          bgMgrStatus.textContent = r.data.error || "Delete failed";
-        } else {
-          bgMgrStatus.textContent = `Deleted ${file}.`;
-          await loadSettings();
-          await loadBackgrounds();
-          applyDefaultsToCreateScreen();
-        }
-      });
-    });
+        </details>
+      </article>`;
+    }).join("");
   }
 
-  bgPreviewCloseBtn.addEventListener("click", () => {
+  const bgEditForm = document.getElementById("bgEditForm");
+  const bgEditTitle = document.getElementById("bgEditTitle");
+  const bgEditNote = document.getElementById("bgEditNote");
+  const bgEditCredit = document.getElementById("bgEditCredit");
+  const bgEditOriginalCredit = document.getElementById("bgEditOriginalCredit");
+  const bgEditErr = document.getElementById("bgEditErr");
+  const bgEditSave = document.getElementById("bgEditSave");
+
+  function closeBackgroundEditor() {
+    editingBackground = null;
+    hideEl(bgEditForm);
+    renderBackgroundLibrary();
+  }
+
+  function closeBackgroundPreview() {
     bgPreviewVideo.pause();
-    bgPreviewVideo.removeAttribute("src");
-    bgPreviewWrap.classList.add("hidden");
+    if (bgPreviewVideo.hasAttribute("src")) {
+      bgPreviewVideo.removeAttribute("src");
+      bgPreviewVideo.removeAttribute("poster");
+      bgPreviewVideo.load();
+    }
+    hideEl(bgPreviewErr);
+    hideEl(bgPreviewWrap);
+  }
+
+  bgPreviewCloseBtn.addEventListener("click", closeBackgroundPreview);
+  bgPreviewVideo.addEventListener("error", () => {
+    if (bgPreviewVideo.hasAttribute("src")) showErr(bgPreviewErr, "Couldn't play this clip. Refresh the library and try again.");
+  });
+  bgFilter.addEventListener("input", renderBackgroundLibrary);
+  document.getElementById("bgEditCancel").addEventListener("click", closeBackgroundEditor);
+  bgEditForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!editingBackground || bgEditSave.disabled) return;
+    const filename = editingBackground;
+    hideEl(bgEditErr);
+    bgEditSave.disabled = true;
+    const r = await api(`/api/backgrounds?filename=${encodeURIComponent(filename)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title: bgEditTitle.value, note: bgEditNote.value, additional_credit: bgEditCredit.value }),
+    });
+    bgEditSave.disabled = false;
+    if (!r.ok) {
+      if (editingBackground === filename) showErr(bgEditErr, r.data.error || "Couldn't save clip details.");
+      return;
+    }
+    if (editingBackground === filename) closeBackgroundEditor();
+    bgMgrStatus.textContent = "Clip details saved.";
+    await loadBackgrounds();
+  });
+
+  bgLibraryGrid.addEventListener("click", async (event) => {
+    const btn = event.target.closest("button[data-action]");
+    if (!btn || btn.disabled) return;
+    const file = btn.closest("[data-file]").dataset.file;
+    const clip = bgClips.find((c) => c.filename === file);
+    if (!clip) return;
+    const endpoint = `/api/backgrounds?filename=${encodeURIComponent(file)}`;
+    switch (btn.dataset.action) {
+      case "preview":
+        stopNarration();
+        closeBackgroundPreview();
+        bgPreviewTitle.textContent = `Preview: ${clip.title || file}`;
+        if (clip.thumbnail) bgPreviewVideo.poster = `/api/backgrounds/thumb?file=${encodeURIComponent(clip.thumbnail)}`;
+        bgPreviewVideo.src = `/api/backgrounds/stream?file=${encodeURIComponent(file)}`;
+        bgPreviewWrap.classList.remove("hidden");
+        bgPreviewWrap.scrollIntoView({ block: "nearest" });
+        bgPreviewVideo.play().catch(() => {}); // Native controls remain available if autoplay is denied.
+        break;
+      case "edit":
+        if (editingBackground) { bgEditTitle.focus(); break; }
+        editingBackground = file;
+        bgEditTitle.value = clip.title || file;
+        bgEditNote.value = clip.note || "";
+        bgEditCredit.value = clip.additional_credit || "";
+        bgEditOriginalCredit.textContent = clip.attribution ? `Existing credit (kept): ${clip.attribution}` : "No original credit recorded.";
+        hideEl(bgEditErr);
+        bgEditForm.classList.remove("hidden");
+        bgEditTitle.focus();
+        break;
+      case "default": {
+        btn.disabled = true;
+        const r = await api("/api/settings", { method: "PUT", body: JSON.stringify({ default_background: file }) });
+        btn.disabled = false;
+        if (!r.ok) { bgMgrStatus.textContent = r.data.error || "Couldn't set default."; break; }
+        settings = r.data.settings;
+        bgDefaultsDirty = false;
+        setDefaultBg.value = file;
+        applyDefaultsToCreateScreen();
+        renderBackgroundLibrary();
+        bgMgrStatus.textContent = "Default background saved.";
+        break;
+      }
+      case "delete":
+        deleteConfirmBg.add(file);
+        renderBackgroundLibrary();
+        break;
+      case "cancel-delete":
+        deleteConfirmBg.delete(file);
+        renderBackgroundLibrary();
+        break;
+      case "confirm-delete": {
+        btn.disabled = true;
+        bgMgrStatus.textContent = `Deleting ${file}…`;
+        const r = await api(endpoint, { method: "DELETE" });
+        btn.disabled = false;
+        if (!r.ok) { bgMgrStatus.textContent = r.data.error || "Couldn't delete the clip."; break; }
+        deleteConfirmBg.delete(file);
+        if (editingBackground === file) closeBackgroundEditor();
+        if (bgPreviewVideo.getAttribute("src")?.endsWith(`=${encodeURIComponent(file)}`)) closeBackgroundPreview();
+        if (settings.default_background === file) settings.default_background = "sequential";
+        await loadBackgrounds();
+        bgMgrStatus.textContent = `Deleted ${file}.`;
+        break;
+      }
+    }
   });
 
   bgUploadBtn.addEventListener("click", async () => {
@@ -752,7 +841,10 @@
     }
   });
 
-  bgRefreshBtn.addEventListener("click", loadBackgrounds);
+  bgRefreshBtn.addEventListener("click", async () => {
+    bgMgrStatus.textContent = "";
+    await loadBackgrounds();
+  });
 
   // --- Prompt & Production JSON ---
   buildPromptBtn.addEventListener("click", async () => {
@@ -1145,11 +1237,10 @@
     const bgTasks = allTasks.filter((t) => t.kind === "bg_import");
 
     // Auto-refresh background library if a bg_import finished since last poll
-    const doneBgCount = bgTasks.filter((t) => t.status === "done").length;
-    if (lastSeenBgImportDoneCount !== -1 && doneBgCount > lastSeenBgImportDoneCount) {
-      await loadBackgrounds();
-    }
-    lastSeenBgImportDoneCount = doneBgCount;
+    const doneId = bgTasks.find((t) => t.status === "done")?.task_id || "";
+    const updatedLibrary = lastSeenBgImportDoneId !== null && doneId && doneId !== lastSeenBgImportDoneId;
+    lastSeenBgImportDoneId = doneId;
+    if (updatedLibrary) await loadBackgrounds();
 
     if (!renderTasks.length) {
       jobsList.innerHTML = '<div class="muted">No render tasks yet. (Previously published videos are automatically cleaned up once live on all accounts.)</div>';

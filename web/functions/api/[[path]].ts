@@ -368,20 +368,41 @@ async function getOrCreateBackgroundsRelease(env: Env): Promise<any> {
   return createRes.json();
 }
 
+// GitHub's asset API can either stream directly or redirect to signed storage.
+// Never forward the API Authorization header to the storage host.
+async function fetchReleaseMedia(env: Env, asset: any, method = "GET", range?: string | null): Promise<Response> {
+  const mediaHeaders: Record<string, string> = {};
+  if (range) mediaHeaders.Range = range;
+  const upstream = await fetch(asset.url, {
+    method,
+    headers: ghHeaders(env, { ...mediaHeaders, Accept: "application/octet-stream" }),
+    redirect: "manual",
+  });
+  const location = upstream.status >= 300 && upstream.status < 400 ? upstream.headers.get("Location") : null;
+  if (!location) return upstream;
+  return fetch(location, { method, headers: mediaHeaders, redirect: "follow" });
+}
+
+const BG_DETAILS_PREFIX = "background_details:";
+type BackgroundDetails = { title: string; note: string; additional_credit: string };
+
+async function getBackgroundDetails(db: D1Database, filename: string): Promise<Partial<BackgroundDetails>> {
+  const value = await getRuntimeState(db, undefined, BG_DETAILS_PREFIX + filename, "{}");
+  try { return JSON.parse(value); } catch { return {}; }
+}
+
 async function loadBackgroundsManifest(env: Env, rel: any): Promise<{ clips: any[] }> {
   const assets: any[] = rel?.assets || [];
   const manAsset = assets.find((a) => a.name === "manifest.json");
   if (!manAsset) return { clips: [] };
-  const dl = await fetch(manAsset.url, {
-    headers: ghHeaders(env, { Accept: "application/octet-stream" }),
-    redirect: "follow",
-  });
-  if (!dl.ok) return { clips: [] };
+  const dl = await fetchReleaseMedia(env, manAsset);
+  if (!dl.ok) throw new Error(`Background manifest unavailable (${dl.status})`);
   try {
     const parsed = await dl.json();
-    return Array.isArray((parsed as any)?.clips) ? (parsed as { clips: any[] }) : { clips: [] };
+    if (!Array.isArray(parsed?.clips)) throw new Error("Invalid background manifest");
+    return parsed;
   } catch {
-    return { clips: [] };
+    throw new Error("Invalid background manifest");
   }
 }
 
@@ -632,7 +653,12 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         .run();
 
       if (Array.isArray(payload.parts)) {
-        const stmts = payload.parts.map((p: any) =>
+        const partsWithCredits = await Promise.all(payload.parts.map(async (part: any) => {
+          if (!part.background_clip || !/^[A-Za-z0-9_.-]+\.mp4$/i.test(part.background_clip)) return part;
+          const { additional_credit } = await getBackgroundDetails(db, part.background_clip);
+          return { ...part, attribution: [...new Set([part.attribution, additional_credit].filter(Boolean))].join("\n") };
+        }));
+        const stmts = partsWithCredits.map((p: any) =>
           db
             .prepare(
               `INSERT INTO task_parts (task_id, part_number, title, description, hashtags_json, filename, asset_id, size_bytes, duration_sec, background_clip, attribution, render_status)
@@ -854,18 +880,56 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const manifest = await loadBackgroundsManifest(env, rel);
     const assetsByName = new Map<string, any>((rel.assets || []).map((a: any) => [a.name, a]));
     const bgIdx = Number(await getRuntimeState(db, env.STORYFORGE_VAULT, "bg_index", "0")) || 0;
-    const clips = (manifest.clips || []).map((c: any) => {
+    // Show playable library assets even if an older/manual upload did not update the manifest.
+    // Such clips do not participate in rotation until they have a manifest entry.
+    const all = [...manifest.clips];
+    const listed = new Set(all.map((c) => c.filename));
+    for (const name of assetsByName.keys()) {
+      if (/^[A-Za-z0-9_.-]+\.mp4$/i.test(name) && !/^(?:pending_upload_|original_|backup_)/i.test(name) && !listed.has(name)) {
+        all.push({ filename: name, title: name, unlisted: true });
+      }
+    }
+    const { results } = await db.prepare("SELECT key, value FROM runtime_state WHERE key >= ? AND key < ?")
+      .bind(BG_DETAILS_PREFIX, "background_details;").all<{ key: string; value: string }>();
+    const details = new Map<string, BackgroundDetails>();
+    for (const row of results || []) {
+      try { details.set(row.key.slice(BG_DETAILS_PREFIX.length), JSON.parse(row.value)); } catch { /* Ignore a malformed override. */ }
+    }
+    const clips = all.map((c: any) => {
       const mp4Asset = assetsByName.get(c.filename);
       const thumbName = c.thumbnail || String(c.filename || "").replace(/\.mp4$/i, ".jpg");
       const hasThumb = assetsByName.has(thumbName);
       return {
         ...c,
+        ...details.get(c.filename),
         thumbnail: hasThumb ? thumbName : null,
         size_bytes: c.size_bytes ?? mp4Asset?.size ?? null,
         asset_exists: Boolean(mp4Asset),
       };
     });
     return jsonResp({ clips, next_background_index: bgIdx });
+  }
+
+  if (path === "/api/backgrounds" && request.method === "PATCH") {
+    const filename = url.searchParams.get("filename") || "";
+    if (!/^[A-Za-z0-9_.-]+\.mp4$/i.test(filename) || /^(?:pending_upload_|original_|backup_)/i.test(filename)) {
+      return jsonResp({ error: "Invalid clip filename." }, 400);
+    }
+    const body: any = await request.json().catch(() => null);
+    const title = typeof body?.title === "string" ? body.title.trim() : "";
+    const note = body?.note;
+    const additionalCredit = body?.additional_credit;
+    if (!title || title.length > 100 || typeof note !== "string" || note.length > 300 ||
+        typeof additionalCredit !== "string" || additionalCredit.length > 400) {
+      return jsonResp({ error: "Enter a title (up to 100 characters), note (up to 300), and additional credit (up to 400)." }, 400);
+    }
+    const rel = await getOrCreateBackgroundsRelease(env);
+    if (!(rel.assets || []).some((asset: any) => asset.name === filename)) {
+      return jsonResp({ error: "This clip is no longer in the library." }, 404);
+    }
+    const details: BackgroundDetails = { title, note: note.trim(), additional_credit: additionalCredit.trim() };
+    await setRuntimeState(db, BG_DETAILS_PREFIX + filename, JSON.stringify(details));
+    return jsonResp({ ok: true, details });
   }
 
   if (path === "/api/backgrounds/thumb" && request.method === "GET") {
@@ -876,10 +940,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const rel = await getOrCreateBackgroundsRelease(env);
     const asset = (rel.assets || []).find((a: any) => a.name === file);
     if (!asset) return jsonResp({ error: "Thumbnail not found" }, 404);
-    const res = await fetch(asset.url, {
-      headers: ghHeaders(env, { Accept: "application/octet-stream" }),
-      redirect: "follow",
-    });
+    const res = await fetchReleaseMedia(env, asset);
     if (!res.ok) return jsonResp({ error: `Thumbnail fetch failed (${res.status})` }, 502);
     return new Response(res.body, {
       status: 200,
@@ -890,7 +951,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     });
   }
 
-  if (path === "/api/backgrounds/stream" && request.method === "GET") {
+  if (path === "/api/backgrounds/stream" && ["GET", "HEAD"].includes(request.method)) {
     const file = url.searchParams.get("file") || "";
     if (!/^[A-Za-z0-9_.-]+\.mp4$/i.test(file)) {
       return jsonResp({ error: "Invalid video filename" }, 400);
@@ -899,26 +960,12 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const asset = (rel.assets || []).find((a: any) => a.name === file);
     if (!asset) return jsonResp({ error: "Background video not found" }, 404);
 
-    // Step 1: Resolve signed GitHub CDN URL (never leak GitHub token to CDN URL)
-    const initRes = await fetch(asset.url, {
-      headers: ghHeaders(env, { Accept: "application/octet-stream" }),
-      redirect: "manual",
-    });
-    const signedUrl =
-      initRes.status >= 300 && initRes.status < 400 ? initRes.headers.get("Location") : null;
-
-    const rangeHeader = request.headers.get("Range");
-    const upstreamHeaders: Record<string, string> = {};
-    if (rangeHeader) upstreamHeaders["Range"] = rangeHeader;
-
-    const mediaRes = signedUrl
-      ? await fetch(signedUrl, { headers: upstreamHeaders })
-      : await fetch(asset.url, {
-          headers: ghHeaders(env, { Accept: "application/octet-stream", ...upstreamHeaders }),
-          redirect: "follow",
-        });
-
-    if (!mediaRes.ok && mediaRes.status !== 206) {
+    const range = request.headers.get("Range");
+    if (range && !/^bytes=(?:\d+-\d*|-\d+)$/i.test(range)) {
+      return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${asset.size}` } });
+    }
+    const mediaRes = await fetchReleaseMedia(env, asset, request.method, range);
+    if (!mediaRes.ok && mediaRes.status !== 416) {
       return jsonResp({ error: `Stream failed (${mediaRes.status})` }, 502);
     }
 
@@ -930,8 +977,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       const val = mediaRes.headers.get(h);
       if (val) outHeaders.set(h, val);
     }
-    return new Response(mediaRes.body, {
-      status: mediaRes.status === 206 ? 206 : 200,
+    return new Response(request.method === "HEAD" ? null : mediaRes.body, {
+      status: mediaRes.status,
       headers: outHeaders,
     });
   }
@@ -947,32 +994,36 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const clips: any[] = manifest.clips || [];
     const oldLen = clips.length;
     const oldIdxPos = clips.findIndex((c) => c.filename === filename);
-    if (oldIdxPos === -1) {
-      return jsonResp({ error: "Background clip not found in manifest" }, 404);
+    if (oldIdxPos === -1 && (/^(?:pending_upload_|original_|backup_)/i.test(filename) || !(rel.assets || []).some((a: any) => a.name === filename))) {
+      return jsonResp({ error: "Background clip not found" }, 404);
     }
 
-    const thumbName = clips[oldIdxPos].thumbnail || filename.replace(/\.mp4$/i, ".jpg");
+    const thumbName = clips[oldIdxPos]?.thumbnail || filename.replace(/\.mp4$/i, ".jpg");
     for (const a of rel.assets || []) {
       if (a.name === filename || a.name === thumbName) {
-        await fetch(`https://api.github.com/repos/${repo}/releases/assets/${a.id}`, {
+        const removed = await fetch(`https://api.github.com/repos/${repo}/releases/assets/${a.id}`, {
           method: "DELETE",
           headers: ghHeaders(env),
         });
+        if (!removed.ok && removed.status !== 404) return jsonResp({ error: `Could not delete ${a.name} (${removed.status}). Retry from the library.` }, 502);
       }
     }
 
     const newClips = clips.filter((c) => c.filename !== filename);
-    await uploadJsonAssetToRelease(env, rel, "manifest.json", { clips: newClips });
+    if (oldIdxPos !== -1) await uploadJsonAssetToRelease(env, rel, "manifest.json", { ...manifest, clips: newClips });
+    await db.prepare("DELETE FROM runtime_state WHERE key = ?").bind(BG_DETAILS_PREFIX + filename).run();
 
     // Safely adjust D1 sequential pointer so the sequence stays continuous and valid
     const curBgIdx = Number(await getRuntimeState(db, env.STORYFORGE_VAULT, "bg_index", "0")) || 0;
     let nextBgIdx = 0;
-    if (newClips.length > 0 && oldLen > 0) {
+    if (oldIdxPos === -1) {
+      nextBgIdx = curBgIdx;
+    } else if (newClips.length > 0 && oldLen > 0) {
       const curPos = curBgIdx % oldLen;
       const adjustedPos = curPos > oldIdxPos ? curPos - 1 : curPos % newClips.length;
       nextBgIdx = adjustedPos;
     }
-    await setRuntimeState(db, "bg_index", String(nextBgIdx));
+    if (oldIdxPos !== -1) await setRuntimeState(db, "bg_index", String(nextBgIdx));
 
     // Reset default_background if this deleted clip was selected as default
     const settings = await getSettings(db);
@@ -1046,7 +1097,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const contentLen = Number(request.headers.get("Content-Length") || 0);
     if (contentLen > MAX_UPLOAD_BODY) {
       return jsonResp(
-        { error: "File is over Cloudflare's direct-upload limit (95 MB). Use URL / Google Drive import instead." },
+        { error: "File is over StoryForge's direct-upload limit (95 MiB). Use URL / Google Drive import instead." },
         413
       );
     }

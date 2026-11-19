@@ -25,13 +25,11 @@
     button:disabled { opacity: 0.55; cursor: not-allowed; }
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
     .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .grid3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+    .grid3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 245px), 1fr)); gap: 12px; }
     @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
     .err { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; padding: 8px 10px; border-radius: 4px; margin-top: 8px; font-size: 13px; }
     .ok { color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 8px 10px; border-radius: 4px; margin-top: 8px; font-size: 13px; }
     .warn { color: #92400e; background: #fffbeb; border: 1px solid #fde68a; padding: 8px 10px; border-radius: 4px; margin-top: 8px; font-size: 13px; }
-    .voice-item { border: 1px solid #e4e4e7; border-radius: 4px; padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .voice-item.selected { border-color: #18181b; background: #f4f4f5; }
     .hidden { display: none !important; }
     .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 12px; font-weight: 600; border: 1px solid #d4d4d8; background: #f4f4f5; }
     .badge.ok { background: #f0fdf4; border-color: #bbf7d0; color: #166534; padding: 2px 7px; margin: 0; }
@@ -47,6 +45,11 @@
     pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; font-size: 12px; background: #f4f4f5; padding: 8px; border-radius: 4px; margin: 6px 0 0; }
     .bg-card { border: 1px solid #e4e4e7; border-radius: 4px; padding: 10px; background: #fff; display: flex; flex-direction: column; gap: 6px; }
     .bg-thumb { width: 100%; aspect-ratio: 9 / 16; max-height: 220px; object-fit: cover; background: #18181b; border-radius: 4px; display: block; }
+    details > summary { cursor: pointer; font-weight: 600; }
+    details.card { margin-bottom: 10px; }
+    audio { width: 100%; margin-top: 8px; }
+    .bg-card { min-width: 0; overflow-wrap: anywhere; }
+    .bg-thumb { object-fit: contain; }
     .checkline { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13.5px; cursor: pointer; }
     .checkline input { width: auto; }
   </style>
@@ -113,14 +116,13 @@
     </section>
 
     <section>
-      <h2>3. Voice Picker</h2>
-      <div class="muted" style="margin-bottom:8px;">Default voice from Settings is pre-selected; you can switch per video.</div>
-      <audio id="samplePlayer" controls class="hidden" style="width:100%; margin-bottom:10px;"></audio>
-      <div id="voiceList">Loading voices...</div>
-    </section>
-
-    <section>
-      <h2>4. Render &amp; Publishing Settings</h2>
+      <h2>3. Render &amp; Publishing Settings</h2>
+      <label for="voiceSelect">Narrator for this video</label>
+      <select id="voiceSelect"></select>
+      <details class="muted" style="margin-top:8px;">
+        <summary>Listen to this voice</summary>
+        <div data-narration="create"></div>
+      </details>
       <div class="grid2">
         <div>
           <label for="speedInput">Voice speed (Edge TTS rate)</label>
@@ -163,7 +165,7 @@
     </section>
 
     <section>
-      <h2>5. Task Queue (Renders &amp; Publishing)</h2>
+      <h2>4. Task Queue (Renders &amp; Publishing)</h2>
       <div class="row" style="margin-top:0; margin-bottom:10px;">
         <button id="refreshJobsBtn" type="button" class="secondary">Refresh tasks</button>
         <button id="runTickBtn" type="button" class="secondary">Run publish tick now</button>
@@ -176,11 +178,12 @@
   <!-- SETTINGS VIEW (SF-006 / SF-005 / SF-008 / SF-009) -->
   <main id="settingsView" class="hidden">
     <section>
-      <h2>Defaults &amp; Publishing Schedule</h2>
+      <h2>Narration &amp; Background Defaults</h2>
       <div class="grid2">
         <div>
           <label for="setDefaultVoice">Default narrator voice</label>
           <select id="setDefaultVoice"></select>
+          <div data-narration="settings"></div>
         </div>
         <div>
           <label for="setDefaultBg">Default background video</label>
@@ -190,6 +193,8 @@
         </div>
       </div>
 
+      <details style="margin-top:14px;">
+        <summary>Publishing schedule and test modes</summary>
       <div class="grid2">
         <div>
           <label for="setCadenceCount">Queue cadence count</label>
@@ -216,6 +221,7 @@
         </div>
       </div>
 
+      </details>
       <div class="row">
         <button id="saveSettingsBtn" type="button">Save Settings</button>
         <span id="settingsStatus" class="muted"></span>
@@ -224,7 +230,92 @@
     </section>
 
     <section>
-      <h2>Zernio API Keys &amp; Connected Accounts</h2>
+      <h2>Background Video Manager</h2>
+      <div class="muted">All added videos are normalized on GitHub Actions to 1080x1920 30fps silent H.264 with a thumbnail.</div>
+
+      <div class="row" style="margin-top:12px;">
+        <button id="bgRefreshBtn" type="button" class="secondary">Refresh library</button>
+
+        <span id="bgMgrStatus" class="muted" role="status"></span>
+      </div>
+
+      <div id="bgImportTasksWrap" class="hidden" style="margin-top:10px;"></div>
+
+      <div id="bgPreviewWrap" class="card hidden" style="margin-top:10px;">
+        <div class="row" style="justify-content:space-between; margin-top:0; margin-bottom:8px;">
+          <strong id="bgPreviewTitle">Preview</strong>
+          <button id="bgPreviewCloseBtn" type="button" class="secondary">Close preview</button>
+        </div>
+        <div id="bgPreviewErr" class="err hidden" role="alert"></div>
+        <video id="bgPreviewVideo" controls playsinline preload="metadata" style="width:100%; max-height:420px; background:#000;"></video>
+      </div>
+
+      <form id="bgEditForm" class="card hidden" style="margin-top:10px;">
+        <h3>Edit clip details</h3>
+        <label for="bgEditTitle">Title</label>
+        <input id="bgEditTitle" type="text" required maxlength="100" />
+        <label for="bgEditNote">Note</label>
+        <textarea id="bgEditNote" rows="2" maxlength="300"></textarea>
+        <label for="bgEditCredit">Additional credit</label>
+        <div id="bgEditOriginalCredit" class="muted"></div>
+        <input id="bgEditCredit" type="text" maxlength="400" />
+        <div class="row">
+          <button id="bgEditSave" type="submit">Save clip details</button>
+          <button id="bgEditCancel" type="button" class="secondary">Cancel</button>
+        </div>
+        <div id="bgEditErr" class="err hidden" role="alert"></div>
+      </form>
+      <label for="bgFilter">Find a clip</label>
+      <input id="bgFilter" type="text" placeholder="Search title, filename or note" />
+      <h3>Library Clips</h3>
+      <div id="bgLibraryGrid" class="grid3">Loading backgrounds...</div>
+      <details class="card" style="margin-top:14px;">
+        <summary>Add a background video</summary>
+      <div class="grid2" style="margin-top: 8px;">
+        <div class="card" style="margin-bottom:0;">
+          <h3 style="margin-top:0;">Direct Upload (&le; 95 MiB)</h3>
+          <div class="muted">Files over 95 MiB cannot be uploaded through Cloudflare directly &mdash; use Link Import below.</div>
+          <label for="bgUploadFile">Video file (.mp4 / .mov / .webm)</label>
+          <input id="bgUploadFile" type="file" accept="video/*" />
+          <label for="bgUploadTitle">Title (optional)</label>
+          <input id="bgUploadTitle" type="text" placeholder="e.g. Parkour Run 04" />
+          <label for="bgUploadNote">Note (optional)</label>
+          <input id="bgUploadNote" type="text" placeholder="Optional source or license note" />
+          <label for="bgUploadAttr">Attribution text (optional)</label>
+          <input id="bgUploadAttr" type="text" placeholder="Optional credit line" />
+          <div class="row">
+            <button id="bgUploadBtn" type="button">Upload &amp; Normalize</button>
+          </div>
+          <div id="bgUploadErr" class="err hidden"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:0;">
+          <h3 style="margin-top:0;">Import from URL / Google Drive</h3>
+          <div class="muted">Best for large files (&gt; 95 MiB). Share link must be publicly readable.</div>
+          <label for="bgUrlInput">Video URL or Google Drive share link</label>
+          <input id="bgUrlInput" type="url" placeholder="https://drive.google.com/file/d/.../view" />
+          <label for="bgUrlTitle">Title</label>
+          <input id="bgUrlTitle" type="text" placeholder="e.g. Mega Ramp 05" />
+          <label for="bgUrlNote">Note (optional)</label>
+          <input id="bgUrlNote" type="text" placeholder="Optional source or license note" />
+          <label for="bgUrlAttr">Attribution text (optional)</label>
+          <input id="bgUrlAttr" type="text" placeholder="Optional credit line" />
+          <div class="row">
+            <button id="bgImportUrlBtn" type="button">Import URL</button>
+          </div>
+          <div id="bgUrlErr" class="err hidden"></div>
+        </div>
+      </div>
+
+      </details>
+      <details class="card">
+        <summary>Library maintenance</summary>
+        <p class="muted">Re-encoding replaces the current library files. Keep a backup before running it.</p>
+        <button id="bgNormalizeAllBtn" type="button" class="secondary">Normalize Existing &amp; Generate Thumbnails</button>
+      </details>
+    </section>
+    <details class="card">
+      <summary>Zernio API Keys &amp; Connected Accounts</summary>
       <div class="muted">Multiple keys supported (e.g. one per teammate). Keys are never displayed back to the browser after saving.</div>
       <div class="grid2">
         <div>
@@ -248,67 +339,8 @@
 
       <h3>Connected Social Accounts</h3>
       <div id="accountsList" class="muted">Loading accounts...</div>
-    </section>
+    </details>
 
-    <section>
-      <h2>Background Video Manager</h2>
-      <div class="muted">All added videos are normalized on GitHub Actions to 1080x1920 30fps silent H.264 with a thumbnail.</div>
-
-      <div class="grid2" style="margin-top: 8px;">
-        <div class="card" style="margin-bottom:0;">
-          <h3 style="margin-top:0;">Direct Upload (&le; 95 MB)</h3>
-          <div class="muted">Files over 95 MB cannot be uploaded through Cloudflare directly &mdash; use Link Import on the right.</div>
-          <label for="bgUploadFile">Video file (.mp4 / .mov / .webm)</label>
-          <input id="bgUploadFile" type="file" accept="video/*" />
-          <label for="bgUploadTitle">Title (optional)</label>
-          <input id="bgUploadTitle" type="text" placeholder="e.g. Parkour Run 04" />
-          <label for="bgUploadNote">Note (optional)</label>
-          <input id="bgUploadNote" type="text" placeholder="Optional source or license note" />
-          <label for="bgUploadAttr">Attribution text (optional)</label>
-          <input id="bgUploadAttr" type="text" placeholder="Optional credit line" />
-          <div class="row">
-            <button id="bgUploadBtn" type="button">Upload &amp; Normalize</button>
-          </div>
-          <div id="bgUploadErr" class="err hidden"></div>
-        </div>
-
-        <div class="card" style="margin-bottom:0;">
-          <h3 style="margin-top:0;">Import from URL / Google Drive</h3>
-          <div class="muted">Best for large files (&gt; 95 MB). Share link must be publicly readable.</div>
-          <label for="bgUrlInput">Video URL or Google Drive share link</label>
-          <input id="bgUrlInput" type="url" placeholder="https://drive.google.com/file/d/.../view" />
-          <label for="bgUrlTitle">Title</label>
-          <input id="bgUrlTitle" type="text" placeholder="e.g. Mega Ramp 05" />
-          <label for="bgUrlNote">Note (optional)</label>
-          <input id="bgUrlNote" type="text" placeholder="Optional source or license note" />
-          <label for="bgUrlAttr">Attribution text (optional)</label>
-          <input id="bgUrlAttr" type="text" placeholder="Optional credit line" />
-          <div class="row">
-            <button id="bgImportUrlBtn" type="button">Import URL</button>
-          </div>
-          <div id="bgUrlErr" class="err hidden"></div>
-        </div>
-      </div>
-
-      <div class="row" style="margin-top:12px;">
-        <button id="bgRefreshBtn" type="button" class="secondary">Refresh library</button>
-        <button id="bgNormalizeAllBtn" type="button" class="secondary">Normalize Existing &amp; Generate Thumbnails</button>
-        <span id="bgMgrStatus" class="muted"></span>
-      </div>
-
-      <div id="bgImportTasksWrap" class="hidden" style="margin-top:10px;"></div>
-
-      <div id="bgPreviewWrap" class="card hidden" style="margin-top:10px;">
-        <div class="row" style="justify-content:space-between; margin-top:0; margin-bottom:8px;">
-          <strong id="bgPreviewTitle">Preview</strong>
-          <button id="bgPreviewCloseBtn" type="button" class="secondary">Close preview</button>
-        </div>
-        <video id="bgPreviewVideo" controls style="width:100%; max-height:420px; background:#000;"></video>
-      </div>
-
-      <h3>Library Clips</h3>
-      <div id="bgLibraryGrid" class="grid3">Loading backgrounds...</div>
-    </section>
   </main>
 
   <script src="/app.js"></script>

@@ -21,7 +21,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
       return Response.json(
         {
           error:
-            "File is over Cloudflare's direct-upload limit (95 MB). Use URL / Google Drive import instead.",
+            "File is over StoryForge's direct-upload limit (95 MiB). Use URL / Google Drive import instead.",
         },
         { status: 413 }
       );
