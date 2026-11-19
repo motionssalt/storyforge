@@ -1,0 +1,98 @@
+{
+  "verified_at": "2026-11-19T05:48:02.423424+00:00",
+  "scope": "Phase 1 technical smoke test only; gameplay integration remains blocked.",
+  "vault": {
+    "manifest_values": 35,
+    "verified_bytes": 99023615,
+    "all_byte_lengths_and_sha256_matched": true
+  },
+  "browser": {
+    "mobile_login": true,
+    "voice_count": 16,
+    "prompt_ui": true,
+    "rate_at_200wpm": "+7%",
+    "json_ui": true,
+    "playable_sample": true,
+    "mobile_no_horizontal_overflow": true,
+    "missing_background_message": "Background library unavailable. Upload reusable gameplay MP4 files and manifest.json to the backgrounds release first; YouTube downloads are currently bot-blocked.",
+    "logout": true,
+    "browser_errors": [],
+    "decoded_voice_samples": 32,
+    "sample_duration_range_seconds": [
+      4.296,
+      5.088
+    ]
+  },
+  "render_outputs": [
+    {
+      "file": "sf_verify_7a11a6abb9_part1.mp4",
+      "duration_sec": 8.4,
+      "bytes": 5743938,
+      "video_codec": "h264",
+      "width": 1080,
+      "height": 1920,
+      "fps": "30/1",
+      "audio_codec": "aac"
+    },
+    {
+      "file": "sf_verify_7a11a6abb9_part2.mp4",
+      "duration_sec": 9.566667,
+      "bytes": 40048869,
+      "video_codec": "h264",
+      "width": 1080,
+      "height": 1920,
+      "fps": "30/1",
+      "audio_codec": "aac"
+    }
+  ],
+  "release_and_proxy": {
+    "job_id": "sf_verify_7a11a6abb9",
+    "workflow_url": "https://github.com/motionssalt/storyforge/actions/runs/44466718014",
+    "downloads": [
+      {
+        "part": 1,
+        "bytes": 5743938,
+        "authenticated_proxy_verified": true,
+        "anonymous_status": 401
+      },
+      {
+        "part": 2,
+        "bytes": 40048869,
+        "authenticated_proxy_verified": true,
+        "anonymous_status": 401
+      }
+    ],
+    "backgrounds_release_url": "https://github.com/motionssalt/storyforge/releases/tag/backgrounds",
+    "renders_release_url": "https://github.com/motionssalt/storyforge/releases/tag/renders",
+    "render_urls": [
+      "https://github.com/motionssalt/storyforge/releases/download/renders/sf_verify_7a11a6abb9_part1.mp4",
+      "https://github.com/motionssalt/storyforge/releases/download/renders/sf_verify_7a11a6abb9_part2.mp4"
+    ]
+  },
+  "visual_inspection": {
+    "inspected_times_sec_per_part": [
+      0.7,
+      1.1,
+      3.5,
+      7.0
+    ],
+    "findings": [
+      "Both videos are vertical and have visually distinct procedural backgrounds.",
+      "810px Reddit post cards change to comment cards above the subtitle safe region.",
+      "Comic subtitles have black outlines and white surrounding words; highlighted yellow word changes between frames.",
+      "No visible card/subtitle overlap or clipping in inspected frames."
+    ],
+    "limitations": [
+      "Test patterns are NOT gameplay.",
+      "Media-analysis summaries contained contradictory cross-file details and were not used as authoritative evidence.",
+      "Independent audio transcription matches both complete narration scripts; this is not proof of frame-perfect word alignment.",
+      "Production-length gameplay render, real-clip rotation across jobs, and target WPM on long narration remain unverified."
+    ]
+  },
+  "security": {
+    "anonymous_private_api_and_sample_requests": "401",
+    "authenticated_mp4_proxy": "Both complete downloads matched release assets byte-for-byte by SHA-256.",
+    "reachable_history": "Clean orphan lineage found at start; no old branches/tags/releases. Common token-pattern scan and exact supplied-token scan passed before each push. Exact old commit SHA reachability until GitHub garbage collection remains a residual risk.",
+    "password": "Stored only as Pages secret, delivered privately in final report; never committed."
+  }
+}

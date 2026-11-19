@@ -1,15 +1,15 @@
 {
   "project": "storyforge",
   "phase": "Phase 1: Working End-to-End",
-  "updated_at": "2026-11-19T05:34:04.285055+00:00",
+  "updated_at": "2026-11-19T05:48:02.423424+00:00",
   "phases": {
-    "1_vault_migration_and_repo_sanitization": "verified_existing",
-    "2_schema_and_agent_prompt": "done_pending_strict_validation_fix",
-    "3_pipeline_and_assets": "in_progress_retry_hardening",
-    "4_cloudflare_site_and_worker": "deployed_pending_audit_fixes",
-    "5_voice_samples_calibration": "verified_existing_16_voices_32_samples",
+    "1_vault_migration_and_repo_sanitization": "verified_existing_done",
+    "2_schema_and_agent_prompt": "done",
+    "3_pipeline_and_assets": "done_technical_smoke_verified",
+    "4_cloudflare_site_and_worker": "done_deployed_verified",
+    "5_voice_samples_calibration": "done_16_voices_32_playable_samples",
     "6_background_footage_library": "blocked_youtube_bot_detection",
-    "7_e2e_sample_render_and_eye_check": "in_progress"
+    "7_e2e_sample_render_and_eye_check": "technical_two_part_smoke_done_real_gameplay_blocked"
   },
   "decisions": [
     "Stored private research vault (skill/, analysis/, data/, old BUILD_STATE.json, AGENT_PROMPT) in Cloudflare Workers KV namespace 'storyforge-vault' (contact sheets chunked into <= 4.5 MB zips under KV's 25 MiB per-value limit).",
@@ -19,16 +19,24 @@
     "Security residual risk note: After orphan-branch history rewrite and deleting old branches, tags, and v1 release, old commit SHAs from prior history may remain reachable by exact SHA on GitHub until GitHub runs repository garbage collection.",
     "Resumed actual existing repository and deployed Pages site, rather than overwriting previous implementation or rewriting already-clean history again.",
     "Cloudflare credential is an account-level token; account token verification succeeds (user-token verify endpoint is inapplicable).",
-    "Background downloads have already hit the specified stop condition; preserve the exact blocker and use clearly labelled procedural footage ONLY for technical smoke verification, never claim it is gameplay."
+    "Background downloads have already hit the specified stop condition; preserve the exact blocker and use clearly labelled procedural footage ONLY for technical smoke verification, never claim it is gameplay.",
+    "Technical sample videos use explicit test backgrounds only, uploaded by successful GitHub Actions run 44466718014. They are not gameplay and do not satisfy the real-gameplay portion of the definition of done.",
+    "No new host front end was created or changed, and no UI polish was performed. Mobile overflow correction was a functional fix.",
+    "Plaintext site password is held only in Pages secret configuration and delivered once in final report; never committed.",
+    "The backgrounds release exists but has no footage. docs/background-upload-manifest.template.json defines exact filenames, source permission statements and attribution; upload it as manifest.json only after matching clips are uploaded.",
+    "Font license notices bundled: Bangers and Lilita One use OFL; Luckiest Guy uses Apache 2.0.",
+    "Stopped footage work at the explicit YouTube bot-block condition rather than changing sources or pretending it succeeded."
   ],
   "blockers": [
     {
-      "phase": "background_library",
-      "reason": "YouTube bot detection on GitHub Actions; multiple yt-dlp clients already tried. No further retries or unapproved footage sources.",
-      "required_action": "Upload legally reusable YouTube gameplay MP4s plus manifest.json to backgrounds release; candidates and uploader helper are in docs/backgrounds-to-upload.json and pipeline/upload_local_backgrounds.py."
+      "phase": "6_background_footage_library",
+      "reason": "YouTube requires bot-verification on GitHub Actions; already tested multiple yt-dlp clients without cookies. No licensed gameplay library assets were downloaded.",
+      "evidence_workflow": "https://github.com/motionssalt/storyforge/actions/runs/44444440622",
+      "required_action": "From a device/network authorized to download the listed reusable YouTube footage, prepare 5-15 minute silent <=1080p H.264 MP4 clips named exactly as docs/background-upload-manifest.template.json; upload them to https://github.com/motionssalt/storyforge/releases/tag/backgrounds. Upload that template as manifest.json, keeping ONLY entries for uploaded files. Preserve original permission quotes and requested creator attribution. pipeline/upload_local_backgrounds.py can perform this from a non-blocked environment.",
+      "acceptance_after_unblock": "Render schema/examples/two-part-series.json through the normal site button; inspect actual gameplay frames/audio/captions, verify distinct sequential clip choice, attribution, target pace and both protected download links."
     }
   ],
-  "next_action": "Harden transient Edge TTS failures, use strict schema validation, verify site authentication and samples, run a short two-part technical smoke render, and inspect actual frames. Gameplay render remains blocked pending authorized footage upload.",
+  "next_action": "User uploads approved gameplay MP4s plus manifest.json to the existing backgrounds release. Then run the normal two-part sample through the site, check actual footage/attribution/sequential rotation, and update phases 6 and 7. Do not start emotional TTS, Android app, or UI polish.",
   "verification": {
     "vault": {
       "values_verified": 35,
@@ -47,6 +55,21 @@
     },
     "site": "https://storyforge-sfb.pages.dev",
     "last_failed_render_run": 44445166835,
-    "background_download_failure_run": 44444440622
-  }
+    "background_download_failure_run": 44444440622,
+    "production_deployment": "https://11083624.storyforge-sfb.pages.dev",
+    "successful_render_run": 44466718014,
+    "successful_render_job": "sf_verify_7a11a6abb9",
+    "render_assets": "https://github.com/motionssalt/storyforge/releases/tag/renders",
+    "public_evidence": "docs/verification.json",
+    "mobile_browser": "390px viewport; login, prompt generation, validation, 16 voice options, audio playback, WPM-derived rate, actionable missing-library error, logout, no JS errors, no horizontal overflow.",
+    "samples": "All 32 MP3 files decoded with ffprobe; live William voice identifier corrected.",
+    "download_proxy": "Both complete sample MP4s verified byte-for-byte against Actions artifacts; anonymous requests receive 401.",
+    "private_prompt": "Existing research-derived private prompt retained; added exact authoritative schema and explicit timing/part rules in KV, then byte-verified; no private method in git."
+  },
+  "not_fully_verified": [
+    "Real-gameplay end-to-end sample and across-job clip rotation.",
+    "Long-form narration actual 250 WPM (calibrated default is an estimate; short smoke includes natural pauses).",
+    "Edge service remains an external dependency and may still reject requests after retry exhaustion.",
+    "KV has eventual consistency; workflow concurrency serializes runs, but near-simultaneous clients or more than one pending Actions run need stronger queue/transactional allocation before multi-user use."
+  ]
 }
