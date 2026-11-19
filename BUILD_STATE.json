@@ -56,9 +56,18 @@
       "private_paths_in_current_tree": false
     },
     "site": "https://storyforge-sfb.pages.dev",
-    "production_deployment": "https://120c000a.storyforge-sfb.pages.dev",
+    "production_deployment": "https://6a7e37a8.storyforge-sfb.pages.dev",
     "render_assets": "https://github.com/motionssalt/storyforge/releases/tag/renders",
     "public_evidence": "docs/verification.json",
+    "live_auth_and_api": {
+      "login_status": 200,
+      "anonymous_me_status": 401,
+      "anonymous_download_status": 401,
+      "authenticated_me": true,
+      "live_prompt_ok": true,
+      "live_validate_ok": true,
+      "live_jobs_top": "sf_mwnaukjf_4aa161 (done, 2 parts)"
+    },
     "round1_field2_and_prompt": {
       "kv_prompt_bytes": 8044,
       "schema_keywords_present": false,
@@ -94,7 +103,6 @@
   },
   "not_fully_verified": [
     "Light card theme (theme: 'light') was checked in scrolling CSS and card background fill code; full Actions MP4 render used two-part-series.json (dark theme in both parts).",
-    "Live authenticated browser round-trip against https://storyforge-sfb.pages.dev with user AUTH_PASSWORD was not run because existing secret plaintext is not readable; /api/validate and repair logic were executed directly against the bundled Worker handler and extracted client repairPastedJson.",
     "Edge service remains an external dependency and may still reject requests after retry exhaustion."
   ]
 }
