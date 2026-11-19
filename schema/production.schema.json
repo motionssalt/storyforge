@@ -4,7 +4,11 @@
   "title": "StoryForge Production JSON",
   "description": "Production script, narration emotion tags, and Reddit card timeline for a single or two-part StoryForge vertical video.",
   "type": "object",
-  "required": ["series_title", "format", "parts"],
+  "required": [
+    "series_title",
+    "format",
+    "parts"
+  ],
   "additionalProperties": false,
   "properties": {
     "series_title": {
@@ -14,7 +18,10 @@
     },
     "format": {
       "type": "string",
-      "enum": ["single", "two_part"]
+      "enum": [
+        "single",
+        "two_part"
+      ]
     },
     "parts": {
       "type": "array",
@@ -28,15 +35,32 @@
   "$defs": {
     "emotion": {
       "type": "string",
-      "enum": ["calm", "tense", "angry", "shocked", "sad", "sarcastic", "whisper", "excited"]
+      "enum": [
+        "calm",
+        "tense",
+        "angry",
+        "shocked",
+        "sad",
+        "sarcastic",
+        "whisper",
+        "excited"
+      ]
     },
     "marker": {
       "type": "string",
-      "enum": ["pause", "sigh", "laugh"]
+      "enum": [
+        "pause",
+        "sigh",
+        "laugh"
+      ]
     },
     "line": {
       "type": "object",
-      "required": ["id", "text", "emotion"],
+      "required": [
+        "id",
+        "text",
+        "emotion"
+      ],
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -45,7 +69,8 @@
         },
         "text": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 2000
         },
         "emotion": {
           "$ref": "#/$defs/emotion"
@@ -60,15 +85,24 @@
     },
     "award": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "additionalProperties": false,
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["gold", "helpful", "heart"]
+          "enum": [
+            "gold",
+            "helpful",
+            "heart"
+          ]
         },
         "count": {
-          "type": ["integer", "string"]
+          "type": [
+            "integer",
+            "string"
+          ]
         },
         "label": {
           "type": "string"
@@ -77,22 +111,33 @@
     },
     "body_content": {
       "oneOf": [
-        { "type": "string", "minLength": 1 },
+        {
+          "type": "string",
+          "minLength": 1
+        },
         {
           "type": "array",
           "minItems": 1,
           "items": {
             "oneOf": [
-              { "type": "string", "minLength": 1 },
+              {
+                "type": "string",
+                "minLength": 1
+              },
               {
                 "type": "object",
-                "required": ["bullets"],
+                "required": [
+                  "bullets"
+                ],
                 "additionalProperties": false,
                 "properties": {
                   "bullets": {
                     "type": "array",
                     "minItems": 1,
-                    "items": { "type": "string", "minLength": 1 }
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
                   }
                 }
               }
@@ -103,62 +148,127 @@
     },
     "reply_object": {
       "type": "object",
-      "required": ["username", "body"],
+      "required": [
+        "username",
+        "body"
+      ],
       "additionalProperties": false,
       "properties": {
-        "username": { "type": "string", "minLength": 1 },
-        "verified": { "type": "boolean" },
-        "age": { "type": "string" },
+        "username": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "age": {
+          "type": "string"
+        },
         "awards": {
           "type": "array",
-          "items": { "$ref": "#/$defs/award" }
+          "items": {
+            "$ref": "#/$defs/award"
+          }
         },
-        "body": { "$ref": "#/$defs/body_content" }
+        "body": {
+          "$ref": "#/$defs/body_content"
+        }
       }
     },
     "card_data": {
       "type": "object",
-      "required": ["type", "theme"],
+      "required": [
+        "type",
+        "theme"
+      ],
       "additionalProperties": false,
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["post", "comment", "reply", "branded"]
+          "enum": [
+            "post",
+            "comment",
+            "reply",
+            "branded"
+          ]
         },
         "theme": {
           "type": "string",
-          "enum": ["dark", "light"]
-        },
-        "subreddit": { "type": "string" },
-        "subreddit_icon_url": { "type": "string" },
-        "username": { "type": "string" },
-        "age": { "type": "string" },
-        "awards": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/award" }
-        },
-        "nsfw": { "type": "boolean" },
-        "verified": { "type": "boolean" },
-        "title": { "type": "string" },
-        "body": { "$ref": "#/$defs/body_content" },
-        "handle": { "type": "string" },
-        "emoji_row": {
-          "oneOf": [
-            { "type": "string" },
-            { "type": "array", "items": { "type": "string" } }
+          "enum": [
+            "dark",
+            "light"
           ]
         },
-        "likes": { "type": "string" },
-        "shares": { "type": "string" },
-        "upvotes": { "type": "string" },
-        "comments_count": { "type": "string" },
-        "show_footer": { "type": "boolean" },
-        "reply": { "$ref": "#/$defs/reply_object" }
+        "subreddit": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        },
+        "age": {
+          "type": "string"
+        },
+        "awards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/award"
+          }
+        },
+        "nsfw": {
+          "type": "boolean"
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "$ref": "#/$defs/body_content"
+        },
+        "handle": {
+          "type": "string"
+        },
+        "emoji_row": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "likes": {
+          "type": "string"
+        },
+        "shares": {
+          "type": "string"
+        },
+        "upvotes": {
+          "type": "string"
+        },
+        "comments_count": {
+          "type": "string"
+        },
+        "show_footer": {
+          "type": "boolean"
+        },
+        "reply": {
+          "$ref": "#/$defs/reply_object"
+        }
       }
     },
     "card_timeline_item": {
       "type": "object",
-      "required": ["from_line", "to_line", "card"],
+      "required": [
+        "from_line",
+        "to_line",
+        "card"
+      ],
       "additionalProperties": false,
       "properties": {
         "from_line": {
@@ -174,17 +284,29 @@
           "minimum": 0.5,
           "maximum": 60
         },
-        "card": { "$ref": "#/$defs/card_data" }
+        "card": {
+          "$ref": "#/$defs/card_data"
+        }
       }
     },
     "part": {
       "type": "object",
-      "required": ["part_number", "title", "hashtags", "story_so_far", "lines", "cards"],
+      "required": [
+        "part_number",
+        "title",
+        "hashtags",
+        "story_so_far",
+        "lines",
+        "cards"
+      ],
       "additionalProperties": false,
       "properties": {
         "part_number": {
           "type": "integer",
-          "enum": [1, 2]
+          "enum": [
+            1,
+            2
+          ]
         },
         "title": {
           "type": "string",
@@ -207,12 +329,18 @@
         "lines": {
           "type": "array",
           "minItems": 3,
-          "items": { "$ref": "#/$defs/line" }
+          "items": {
+            "$ref": "#/$defs/line"
+          },
+          "maxItems": 200
         },
         "cards": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/card_timeline_item" }
+          "items": {
+            "$ref": "#/$defs/card_timeline_item"
+          },
+          "maxItems": 30
         }
       }
     }

@@ -35,6 +35,16 @@
   let voices = [];
   let selectedVoiceId = "";
   let pollTimer = null;
+  let speedOverridden = false;
+  function updateCalibratedRate() {
+    if (speedOverridden) return;
+    const voice = voices.find(v => v.id === selectedVoiceId);
+    if (!voice?.base_wpm) return;
+    const rate = Math.max(-50, Math.min(65, Math.round(((Number(wpmInput.value) || 250) / voice.base_wpm - 1) * 100)));
+    speedInput.value = `${rate >= 0 ? "+" : ""}${rate}%`;
+  }
+  speedInput.addEventListener("input", () => { speedOverridden = true; });
+  wpmInput.addEventListener("input", updateCalibratedRate);
 
   function showErr(el, msg) {
     el.textContent = msg;
@@ -45,11 +55,12 @@
   }
 
   async function api(path, opts = {}) {
-    const res = await fetch(path, {
+    let res;
+    try { res = await fetch(path, {
       credentials: "same-origin",
       headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
       ...opts,
-    });
+    }); } catch { return { ok: false, status: 0, data: {error: "Network unavailable. Check your connection and retry."} }; }
     const data = await res.json().catch(() => ({}));
     return { ok: res.ok, status: res.status, data };
   }
@@ -165,7 +176,7 @@
     voices = cfg.voices || [];
     if (voices.length && !selectedVoiceId) {
       selectedVoiceId = voices[0].id;
-      speedInput.value = voices[0].default_rate || "+35%";
+      updateCalibratedRate();
     }
     renderVoices();
   }
@@ -188,7 +199,8 @@
       `;
       div.querySelector('input[type="radio"]').addEventListener("change", () => {
         selectedVoiceId = v.id;
-        speedInput.value = v.default_rate || "+35%";
+        speedOverridden = false;
+        updateCalibratedRate();
         renderVoices();
       });
       div.querySelectorAll(".play-btn").forEach((btn) => {

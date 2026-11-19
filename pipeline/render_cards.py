@@ -514,21 +514,24 @@ def render_cards_to_pngs(
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 1080, "height": 1920}, device_scale_factor=1)
+        page.route("**/*", lambda route: route.abort() if route.request.url.startswith(("http:", "https:", "file:")) else route.continue_())
         page.set_content(CARD_HTML_TEMPLATE)
 
         for idx, item in enumerate(cards):
             card_data = json.loads(json.dumps(item["card"]))
             # Assign random avatar from local pool (no network needed)
             if card_data.get("type") == "post":
-                if not card_data.get("subreddit_icon_url"):
-                    card_data["subreddit_icon_url"] = pick_avatar()
+                card_data["subreddit_icon_url"] = pick_avatar()
             else:
                 card_data["avatar_url"] = pick_avatar()
                 if card_data.get("type") == "reply" and isinstance(card_data.get("reply"), dict):
                     card_data["reply"]["avatar_url"] = pick_avatar()
 
             page.evaluate("(d) => window.setCardData(d)", card_data)
-            page.wait_for_timeout(40)
+            page.wait_for_function("Array.from(document.images).every(i => i.complete)")
+            height = page.locator(".r-card").evaluate("el => el.getBoundingClientRect().height")
+            if height > 1050:
+                raise ValueError(f"Card {idx + 1} is {height:.0f}px tall; shorten its text so it fits above captions (maximum 1050px).")
             out_png = os.path.join(out_dir, f"card_{idx:02d}.png")
             stage = page.locator("#stage")
             stage.screenshot(path=out_png, omit_background=True)

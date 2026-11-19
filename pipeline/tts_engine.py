@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import difflib
 import inspect
+import random
 import os
 import re
 import subprocess
@@ -80,7 +81,7 @@ def parse_rate_pct(rate_str: str | int | float | None, default: int = 35) -> int
 
 
 def format_rate(pct: int) -> str:
-    pct = max(-50, min(80, int(pct)))
+    pct = max(-50, min(65, int(pct)))
     return f"+{pct}%" if pct >= 0 else f"{pct}%"
 
 
@@ -147,11 +148,7 @@ def align_whisper_words_to_script(
     if not script_words:
         return []
     if not whisper_words:
-        step = total_duration / len(script_words)
-        return [
-            WordTiming(word=w, start=i * step, end=(i + 1) * step, line_id=lid)
-            for i, (w, lid) in enumerate(script_words)
-        ]
+        raise RuntimeError("No word boundaries or aligned transcription available; refusing to fabricate caption timings.")
 
     s_norm = [_norm_word(w) for w, _ in script_words]
     w_norm = [_norm_word(w) for w, _, _ in whisper_words]
@@ -258,10 +255,11 @@ class EdgeTTSEngine:
             attempts = []
             if supports_boundary_kw:
                 attempts.append({"rate": eff_rate, "boundary": "WordBoundary"})
-            attempts.append({"rate": eff_rate})
-            attempts.append({"rate": eff_rate})
+            attempts.extend({"rate": eff_rate} for _ in range(5))
 
             for attempt_idx, kwargs in enumerate(attempts):
+                if attempt_idx:
+                    await asyncio.sleep(min(16, 2 ** attempt_idx) + random.uniform(0, 1))
                 line_wb = []
                 try:
                     comm = edge_tts.Communicate(clean_text, voice_id, **kwargs)
@@ -278,15 +276,17 @@ class EdgeTTSEngine:
                                 w_txt = str(chunk.get("text", "")).strip()
                                 if w_txt:
                                     line_wb.append((w_txt, offset_s, offset_s + dur_s))
-                    if audio_bytes > 0:
-                        last_exc = None
-                        break
+                    if audio_bytes <= 0:
+                        raise RuntimeError(f"Edge returned empty audio for {lid}")
+                    last_exc = None
+                    break
                 except Exception as exc:
                     last_exc = exc
                     print(f"[tts] Attempt {attempt_idx+1} failed for {lid} ({kwargs}): {exc}")
-                    await asyncio.sleep(1.0)
+
             if last_exc is not None:
-                raise last_exc
+                raise RuntimeError(f"Edge TTS failed for {lid} after {len(attempts)} attempts: {last_exc}") from last_exc
+            await asyncio.sleep(0.6)
 
             # Convert to standard 44.1kHz mono PCM WAV
             subprocess.run(
@@ -397,8 +397,8 @@ class EdgeTTSEngine:
     def _transcribe_with_faster_whisper(self, audio_path: str) -> list[tuple[str, float, float]]:
         try:
             from faster_whisper import WhisperModel
-        except ImportError:
-            return []
+        except ImportError as exc:
+            raise RuntimeError("Edge returned no word timings and faster-whisper is not installed.") from exc
 
         model = WhisperModel("base.en", device="cpu", compute_type="int8")
         segments, _ = model.transcribe(audio_path, word_timestamps=True, language="en")

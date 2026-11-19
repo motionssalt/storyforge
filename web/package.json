@@ -1,0 +1,20 @@
+{
+  "name": "storyforge-web",
+  "version": "1.0.0",
+  "description": "Plain StoryForge Pages site and authenticated Worker API",
+  "scripts": {
+    "build:validator": "node scripts/build-validator.cjs",
+    "build": "npm run build:validator && wrangler pages functions build functions --outdir .wrangler/functions",
+    "deploy": "npm run build:validator && wrangler pages deploy public --project-name storyforge --branch main"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ajv": "8.20.0"
+  },
+  "devDependencies": {
+    "wrangler": "4.165.0"
+  },
+  "private": true
+}

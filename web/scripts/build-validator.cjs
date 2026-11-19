@@ -1,0 +1,10 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const Ajv2020 = require('ajv/dist/2020').default;
+const standaloneCode = require('ajv/dist/standalone').default;
+const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '../../schema/production.schema.json'), 'utf8'));
+const ajv = new Ajv2020({ allErrors: true, strict: false, allowUnionTypes: true, code: { source: true, esm: true } });
+const validate = ajv.compile(schema);
+fs.mkdirSync(path.join(__dirname, '../lib'), { recursive: true });
+fs.writeFileSync(path.join(__dirname, '../lib/production-validator.js'), standaloneCode(ajv, validate));
+console.log('Compiled exact production schema without runtime eval.');

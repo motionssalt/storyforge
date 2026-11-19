@@ -13,6 +13,10 @@ on:
         default: "false"
         type: string
 
+concurrency:
+  group: storyforge-render
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -46,3 +50,15 @@ jobs:
           WORKER_INTERNAL_SECRET: ${{ secrets.WORKER_INTERNAL_SECRET }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python pipeline/run_job.py
+
+      - name: Preserve render diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-${{ github.event.inputs.job_id }}
+          path: |
+            /tmp/sf_render/**/*.mp4
+            /tmp/sf_render/**/*.ass
+            /tmp/sf_render/**/cards/*.png
+          if-no-files-found: ignore
+          retention-days: 3

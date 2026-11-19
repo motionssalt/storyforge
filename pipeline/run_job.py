@@ -119,6 +119,9 @@ def render_all_parts(
     coupled_speedup_factor: float | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    from jsonschema import Draft202012Validator
+    with open(os.path.join(root, "schema", "production.schema.json")) as schema_file:
+        Draft202012Validator(json.load(schema_file)).validate(production_json)
     avatars_dir = os.path.join(root, "assets", "avatars")
     fonts_dir = os.path.join(root, "assets", "fonts")
     engine = get_tts_engine(tts_engine_name)
@@ -251,6 +254,10 @@ def main() -> None:
     try:
         worker_post_status(worker_url, secret, {"job_id": job_id, "status": "running"})
         job = worker_get_job(worker_url, job_id, secret)
+        if not test_bg and job.get("background_mode", "sequential") == "sequential":
+            req = urllib.request.Request(worker_url.rstrip("/") + "/api/internal/background-index", headers={"X-Internal-Secret": secret})
+            with urllib.request.urlopen(req, timeout=30) as response:
+                job["background_index"] = json.loads(response.read())["index"]
 
         parts, next_bg_idx = render_all_parts(
             job_id=job_id,
@@ -289,7 +296,7 @@ def main() -> None:
                 "job_id": job_id,
                 "status": "done",
                 "parts": public_parts,
-                "next_background_index": next_bg_idx,
+                **({"next_background_index": next_bg_idx} if not test_bg else {}),
             },
         )
         print("JOB COMPLETE:", job_id)

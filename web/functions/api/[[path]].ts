@@ -1,3 +1,6 @@
+import validateSchema from "../../lib/production-validator.js";
+import voiceConfig from "../../public/voices.json";
+
 interface Env {
   STORYFORGE_VAULT: KVNamespace;
   AUTH_PASSWORD: string;
@@ -46,13 +49,13 @@ function parseCookies(cookieHeader: string | null): Record<string, string> {
   for (const part of cookieHeader.split(";")) {
     const idx = part.indexOf("=");
     if (idx > 0) {
-      out[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim());
+      try { out[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim()); } catch { /* Invalid cookies are unauthenticated, not a server error. */ }
     }
   }
   return out;
 }
 
-async function isAuthenticated(request: Request, env: Env): Promise<boolean> {
+export async function isAuthenticated(request: Request, env: Env): Promise<boolean> {
   const headerPw = request.headers.get("X-Auth-Password");
   if (headerPw && env.AUTH_PASSWORD && headerPw === env.AUTH_PASSWORD) {
     return true;
@@ -71,6 +74,9 @@ async function isAuthenticated(request: Request, env: Env): Promise<boolean> {
 
 function validateProductionJson(doc: any): string[] {
   const errors: string[] = [];
+  if (!validateSchema(doc)) {
+    return (validateSchema.errors || []).map((e: any) => `${e.instancePath || "/"}: ${e.message}${e.params?.additionalProperty ? " (" + e.params.additionalProperty + ")" : ""}`);
+  }
   if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
     return ["Root value must be a JSON object."];
   }
@@ -93,6 +99,7 @@ function validateProductionJson(doc: any): string[] {
 
   doc.parts.forEach((part: any, pi: number) => {
     const p = `parts[${pi}]`;
+    if (part.part_number !== pi + 1) errors.push(`${p}.part_number: expected ${pi + 1}; parts must be in order.`);
     if (!part || typeof part !== "object") {
       errors.push(`${p}: must be an object.`);
       return;
@@ -142,6 +149,19 @@ function validateProductionJson(doc: any): string[] {
       });
     }
 
+    const order = new Map(part.lines.map((line: any, index: number) => [line.id, index]));
+    if (part.cards?.length) {
+      const first = part.cards[0];
+      if (first.from_line !== part.lines[0].id || !["post", "branded"].includes(first.card.type)) errors.push(`${p}.cards[0]: first card must be a post or branded hook starting on the first line.`);
+      let previousStart = -1;
+      for (const [ci, card] of part.cards.entries()) {
+        const start = Number(order.get(card.from_line));
+        const end = Number(order.get(card.to_line));
+        if (start > end) errors.push(`${p}.cards[${ci}]: from_line must not follow to_line.`);
+        if (start < previousStart) errors.push(`${p}.cards[${ci}]: cards must be ordered by narration line.`);
+        previousStart = start;
+      }
+    }
     if (!Array.isArray(part.cards) || part.cards.length === 0) {
       errors.push(`${p}.cards: must be a non-empty array of card timeline entries.`);
     } else {
@@ -195,9 +215,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   const url = new URL(request.url);
   const path = url.pathname;
 
-  if (path === "/api/health") {
-    return jsonResp({ ok: true });
-  }
+
 
   // Login endpoint
   if (path === "/api/login" && request.method === "POST") {
@@ -242,6 +260,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       return jsonResp({ error: "Unauthorized internal call" }, 401);
     }
 
+    if (path === "/api/internal/background-index" && request.method === "GET") {
+      return jsonResp({ index: Number(await env.STORYFORGE_VAULT.get("state:bg_index") || 0) });
+    }
     if (path === "/api/internal/job" && request.method === "GET") {
       const id = url.searchParams.get("id");
       if (!id) return jsonResp({ error: "Missing id" }, 400);
@@ -277,6 +298,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return jsonResp({ error: "Authentication required" }, 401);
   }
 
+  if (path === "/api/health") return jsonResp({ ok: true });
+
   // Build agent prompt from KV template
   if (path === "/api/prompt" && request.method === "POST") {
     const body: any = await request.json().catch(() => ({}));
@@ -292,9 +315,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       return jsonResp({ error: "Agent prompt template missing in vault KV." }, 500);
     }
     const filled = template
-      .replaceAll("{{IDEA}}", idea)
       .replaceAll("{{TARGET_WPM}}", String(targetWpm))
-      .replaceAll("{{TARGET_WORDS_90S}}", String(words90s));
+      .replaceAll("{{TARGET_WORDS_90S}}", String(words90s))
+      .replaceAll("{{IDEA}}", idea);
 
     return jsonResp({ prompt: filled, target_wpm: targetWpm, target_words_90s: words90s });
   }
@@ -330,9 +353,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       return jsonResp({ error: "Validation failed", errors }, 400);
     }
 
-    const voiceId = String(body.voice_id || "en-US-AndrewMultilingualNeural");
-    const voiceSpeed = String(body.voice_speed || "+37%");
-    const targetWpm = Number(body.target_wpm) || 250;
+    const voiceId = String(body.voice_id || voiceConfig.voices[0].id);
+    const voice = voiceConfig.voices.find((v) => v.id === voiceId);
+    if (!voice) return jsonResp({ error: "voice_id: choose a supported voice." }, 400);
+    const targetWpm = Number(body.target_wpm ?? 250);
+    if (!Number.isFinite(targetWpm) || targetWpm < 150 || targetWpm > 350) return jsonResp({ error: "target_wpm: must be between 150 and 350." }, 400);
+    const calibrated = Math.max(-50, Math.min(65, Math.round((targetWpm / voice.base_wpm - 1) * 100)));
+    const voiceSpeed = String(body.voice_speed || `${calibrated >= 0 ? "+" : ""}${calibrated}%`);
+    if (!/^[+-]\d{1,2}%$/.test(voiceSpeed) || Number.parseInt(voiceSpeed) < -50 || Number.parseInt(voiceSpeed) > 65) return jsonResp({ error: "voice_speed: use a rate between -50% and +65%." }, 400);
     const bgMode = String(body.background_mode || "sequential");
 
     let bgIndex = 0;
@@ -355,6 +383,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       voice_speed: voiceSpeed,
       target_wpm: targetWpm,
       background_index: bgIndex,
+      background_mode: bgMode,
       production_json: prod,
       parts: [],
       error: null,
