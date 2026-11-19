@@ -54,7 +54,7 @@ class TaskReporter:
                 self._buffer.append(
                     {
                         "ts": utc_now_iso(),
-                        "level": level,
+                        "level": level_str,
                         "stage": stage,
                         "message": message,
                         "progress_pct": round(self._progress_pct, 1),
@@ -67,19 +67,24 @@ class TaskReporter:
         self,
         stage: str,
         message: str,
-        level: str = "info",
+        level: str | float | int = "info",
         progress_pct: float | None = None,
         flush: bool = False,
     ) -> None:
-        print(f"[{stage}] {level.upper()}: {message}", flush=True)
+        if isinstance(level, (int, float)):
+            progress_pct = float(level)
+            level = "info"
+        level_str = str(level or "info")
+        print(f"[{stage}] {level_str.upper()}: {message}", flush=True)
         should_flush = flush
         with self._lock:
+            self._current_stage = stage
             if progress_pct is not None:
                 self._progress_pct = max(0.0, min(100.0, float(progress_pct)))
             self._buffer.append(
                 {
                     "ts": utc_now_iso(),
-                    "level": level,
+                    "level": level_str,
                     "stage": stage,
                     "message": message,
                     "progress_pct": round(self._progress_pct, 1),
