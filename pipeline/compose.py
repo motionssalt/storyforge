@@ -9,7 +9,6 @@ Combines:
 
 from __future__ import annotations
 
-import os
 import subprocess
 from typing import Any
 
@@ -32,7 +31,6 @@ def compute_card_windows(
         if "duration_sec" in item and item["duration_sec"] is not None:
             en = min(total_duration, st + float(item["duration_sec"]))
         elif idx == 0:
-            # First hook card: show roughly 2.5-2.9 seconds
             en = min(total_duration, st + 2.8)
 
         en = max(st + 0.5, min(total_duration, en))
@@ -53,10 +51,9 @@ def compose_video(
     """Render final 1080x1920 30fps H.264 MP4."""
     cmd: list[str] = ["ffmpeg", "-y", "-i", bg_video_path, "-i", audio_wav_path]
 
-    # Add each card PNG as a looped single-image stream trimmed to its active window
     for idx, (_, st, en) in enumerate(card_windows):
         dur = max(0.5, en - st)
-        cmd += ["-loop", "1", "-t", f"{dur:.3f}", "-itsoffset", f"{st:.3f}", "-i", card_pngs[idx]]
+        cmd += ["-loop", "1", "-t", f"{dur:.3f}", "-i", card_pngs[idx]]
 
     filter_parts: list[str] = []
     last_v = "0:v"
@@ -72,14 +69,14 @@ def compose_video(
         filter_parts.append(
             f"[{in_idx}:v]format=rgba,"
             f"fade=t=in:st=0:d={fade_d:.3f}:alpha=1,"
-            f"fade=t=out:st={fade_out_st:.3f}:d={fade_d:.3f}:alpha=1[{card_tag}]"
+            f"fade=t=out:st={fade_out_st:.3f}:d={fade_d:.3f}:alpha=1,"
+            f"setpts=PTS-STARTPTS+{st:.3f}/TB[{card_tag}]"
         )
         filter_parts.append(
             f"[{last_v}][{card_tag}]overlay=x=0:y=190:eof_action=pass:enable='between(t,{st:.3f},{en:.3f})'[{out_tag}]"
         )
         last_v = out_tag
 
-    # Burn in ASS subtitles with bundled TTF fonts directory
     ass_esc = ass_path.replace("\\", "/").replace(":", "\\:")
     fonts_esc = fonts_dir.replace("\\", "/").replace(":", "\\:")
     filter_parts.append(f"[{last_v}]ass='{ass_esc}':fontsdir='{fonts_esc}'[vfinal]")

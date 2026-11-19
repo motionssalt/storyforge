@@ -7,6 +7,11 @@ on:
         description: "StoryForge Job ID stored in Cloudflare KV"
         required: true
         type: string
+      test_background:
+        description: "Use procedural test background (ONLY when backgrounds release is empty for smoke testing)"
+        required: false
+        default: "false"
+        type: string
 
 permissions:
   contents: write
@@ -36,6 +41,7 @@ jobs:
       - name: Run render pipeline
         env:
           JOB_ID: ${{ github.event.inputs.job_id }}
+          TEST_BACKGROUND: ${{ github.event.inputs.test_background }}
           WORKER_URL: ${{ secrets.WORKER_URL }}
           WORKER_INTERNAL_SECRET: ${{ secrets.WORKER_INTERNAL_SECRET }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

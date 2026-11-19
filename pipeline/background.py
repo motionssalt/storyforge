@@ -19,9 +19,15 @@ def fetch_backgrounds_manifest(repo: str, github_token: str | None = None) -> di
     headers = {"Accept": "application/vnd.github+json", "User-Agent": "StoryForge-Pipeline"}
     if github_token:
         headers["Authorization"] = f"Bearer {github_token}"
-    req = urllib.request.Request(api_url, headers=headers)
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        rel = json.loads(resp.read())
+    try:
+        req = urllib.request.Request(api_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            rel = json.loads(resp.read())
+    except Exception as exc:
+        raise RuntimeError(
+            "No 'backgrounds' GitHub Release found. YouTube blocks downloads from GitHub Actions IPs; "
+            "run pipeline/upload_local_backgrounds.py locally or upload clips + manifest.json to the 'backgrounds' release."
+        ) from exc
 
     for asset in rel.get("assets", []):
         if asset["name"] == "manifest.json":
@@ -80,7 +86,6 @@ def prepare_background_clip(
     Crop/scale gameplay video to 1080x1920, 30fps, silent, >= target_duration_sec.
     Loops smoothly if clip is shorter than narration.
     """
-    # Crop center 9:16 from any aspect ratio, then scale to 1080x1920
     vf = (
         "crop='min(iw,ih*9/16)':'min(ih,iw*16/9)',"
         "scale=1080:1920:flags=lanczos,"
@@ -106,6 +111,48 @@ def prepare_background_clip(
             "veryfast",
             "-crf",
             "20",
+            out_path,
+        ],
+        check=True,
+    )
+    return out_path
+
+
+def generate_test_pattern_background(
+    out_path: str,
+    duration_sec: float,
+    variant_index: int = 0,
+) -> str:
+    """
+    Test-only procedural 9:16 background (used ONLY when test_background=true
+    for pipeline smoke verification while 'backgrounds' release is blocked).
+    Each variant_index produces a distinct visual color/pattern so multi-part
+    background switching is visibly verifiable.
+    """
+    if variant_index % 2 == 0:
+        src = f"testsrc2=size=1080x1920:rate=30:duration={duration_sec + 0.25:.3f}"
+        vf = "hue=h=20:s=0.85,eq=brightness=-0.12:contrast=0.9,format=yuv420p"
+    else:
+        src = f"life=size=540x960:rate=30:mold=10:ratio=0.3:life_color=#38bdf8:death_color=#1e1b4b:duration={duration_sec + 0.25:.3f}"
+        vf = "scale=1080:1920:flags=neighbor,format=yuv420p"
+
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            src,
+            "-vf",
+            vf,
+            "-an",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "22",
             out_path,
         ],
         check=True,

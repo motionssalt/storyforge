@@ -16,7 +16,12 @@ import traceback
 import urllib.request
 from typing import Any
 
-from background import download_release_asset, fetch_backgrounds_manifest, prepare_background_clip
+from background import (
+    download_release_asset,
+    fetch_backgrounds_manifest,
+    generate_test_pattern_background,
+    prepare_background_clip,
+)
 from compose import compose_video, compute_card_windows
 from render_cards import render_cards_to_pngs
 from subtitles import generate_ass_subtitles
@@ -109,6 +114,7 @@ def render_all_parts(
     repo: str | None,
     github_token: str | None,
     local_bg: str | None = None,
+    test_background: bool = False,
     tts_engine_name: str = "edge",
     coupled_speedup_factor: float | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
@@ -118,7 +124,7 @@ def render_all_parts(
     engine = get_tts_engine(tts_engine_name)
 
     manifest_clips: list[dict[str, Any]] = []
-    if not local_bg:
+    if not local_bg and not test_background:
         assert repo, "GITHUB_REPOSITORY is required when not using --local-bg"
         manifest = fetch_backgrounds_manifest(repo, github_token)
         manifest_clips = manifest.get("clips", [])
@@ -157,10 +163,19 @@ def render_all_parts(
         generate_ass_subtitles(tts_res.word_timings, ass_path, font_name="Lilita One")
 
         # 4. Background footage (sequential per video)
+        prep_bg = os.path.join(part_dir, "bg_1080x1920.mp4")
         if local_bg:
-            raw_bg = local_bg
-            attribution = "Local test background clip"
             clip_name = os.path.basename(local_bg)
+            attribution = "Local test background clip"
+            prepare_background_clip(local_bg, prep_bg, tts_res.duration_sec)
+        elif test_background:
+            clip_name = f"test_pattern_variant_{cur_bg_idx % 2}.mp4"
+            attribution = (
+                f"Test background #{cur_bg_idx} (procedural verification pattern — "
+                "upload real YouTube gameplay clips to the 'backgrounds' GitHub Release for production)"
+            )
+            generate_test_pattern_background(prep_bg, tts_res.duration_sec, variant_index=cur_bg_idx)
+            cur_bg_idx += 1
         else:
             clip_entry = manifest_clips[cur_bg_idx % len(manifest_clips)]
             cur_bg_idx += 1
@@ -168,9 +183,7 @@ def render_all_parts(
             attribution = clip_entry.get("attribution", "")
             raw_bg = os.path.join(part_dir, clip_name)
             download_release_asset(repo, "backgrounds", clip_name, raw_bg, github_token)
-
-        prep_bg = os.path.join(part_dir, "bg_1080x1920.mp4")
-        prepare_background_clip(raw_bg, prep_bg, tts_res.duration_sec)
+            prepare_background_clip(raw_bg, prep_bg, tts_res.duration_sec)
 
         # 5. Compose final MP4
         out_filename = f"{job_id}_part{p_num}.mp4"
@@ -207,7 +220,7 @@ def main() -> None:
     parser.add_argument("--local-json", help="Run locally from a production JSON file")
     parser.add_argument("--local-bg", help="Local MP4 background clip for offline testing")
     parser.add_argument("--voice", default="en-US-AndrewMultilingualNeural")
-    parser.add_argument("--speed", default="+37%")
+    parser.add_argument("--speed", default="+34%")
     parser.add_argument("--out-dir", default="/tmp/sf_render")
     args = parser.parse_args()
 
@@ -223,6 +236,7 @@ def main() -> None:
             repo=os.environ.get("GITHUB_REPOSITORY"),
             github_token=os.environ.get("GITHUB_TOKEN"),
             local_bg=args.local_bg,
+            test_background=(not args.local_bg),
         )
         print("LOCAL RENDER COMPLETE:", json.dumps(parts, indent=2))
         return
@@ -232,6 +246,7 @@ def main() -> None:
     job_id = os.environ["JOB_ID"]
     repo = os.environ["GITHUB_REPOSITORY"]
     gh_token = os.environ["GITHUB_TOKEN"]
+    test_bg = os.environ.get("TEST_BACKGROUND", "false").lower() == "true"
 
     try:
         worker_post_status(worker_url, secret, {"job_id": job_id, "status": "running"})
@@ -241,11 +256,12 @@ def main() -> None:
             job_id=job_id,
             production_json=job["production_json"],
             voice_id=job["voice_id"],
-            voice_speed=job.get("voice_speed", "+37%"),
+            voice_speed=job.get("voice_speed", "+34%"),
             bg_index=int(job.get("background_index", 0)),
             work_dir=args.out_dir,
             repo=repo,
             github_token=gh_token,
+            test_background=test_bg,
         )
 
         rel = ensure_renders_release(repo, gh_token)
