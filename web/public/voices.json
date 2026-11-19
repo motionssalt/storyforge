@@ -157,7 +157,7 @@
       "sample_emotional": "/samples/en-GB-ThomasNeural_emotional.mp3"
     },
     {
-      "id": "en-AU-WilliamNeural",
+      "id": "en-AU-WilliamMultilingualNeural",
       "name": "William (AU)",
       "gender": "male",
       "accent": "AU",
