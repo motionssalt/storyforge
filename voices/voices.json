@@ -157,15 +157,15 @@
       "sample_emotional": "/samples/en-GB-ThomasNeural_emotional.mp3"
     },
     {
-      "id": "en-AU-WilliamNeural",
+      "id": "en-AU-WilliamMultilingualNeural",
       "name": "William (AU)",
       "gender": "male",
       "accent": "AU",
       "description": "Relaxed Australian narrator with clean pacing.",
       "base_wpm": 203.8,
       "default_rate": "+23%",
-      "sample_neutral": "/samples/en-AU-WilliamNeural_neutral.mp3",
-      "sample_emotional": "/samples/en-AU-WilliamNeural_emotional.mp3"
+      "sample_neutral": "/samples/en-AU-WilliamMultilingualNeural_neutral.mp3",
+      "sample_emotional": "/samples/en-AU-WilliamMultilingualNeural_emotional.mp3"
     },
     {
       "id": "en-CA-LiamNeural",

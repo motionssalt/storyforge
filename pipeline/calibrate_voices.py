@@ -62,7 +62,7 @@ async def process_voice(voice: dict, target_wpm: int, max_rate: int, samples_dir
     neutral_mp3 = os.path.join(samples_dir, f"{vid}_neutral.mp3")
     emotional_mp3 = os.path.join(samples_dir, f"{vid}_emotional.mp3")
     await edge_tts.Communicate(SAMPLE_NEUTRAL, vid, rate=default_rate).save(neutral_mp3)
-    await edge_tts.Communicate(SAMPLE_EMOTIONAL, vid, rate=f"+{min(max_rate, clamped_pct + 5)}%", pitch="+2Hz").save(emotional_mp3)
+    await edge_tts.Communicate(SAMPLE_EMOTIONAL, vid, rate=f"+{min(max_rate, clamped_pct + 5)}%").save(emotional_mp3)
 
     voice["base_wpm"] = base_wpm
     voice["default_rate"] = default_rate

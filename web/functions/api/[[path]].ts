@@ -353,6 +353,15 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       return jsonResp({ error: "Validation failed", errors }, 400);
     }
 
+    const repoForLibrary = env.GITHUB_REPO || "motionssalt/storyforge";
+    const library = await fetch(`https://api.github.com/repos/${repoForLibrary}/releases/tags/backgrounds`, {
+      headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, Accept: "application/vnd.github+json", "User-Agent": "StoryForge-Worker" },
+    });
+    if (!library.ok) return jsonResp({ error: "Background library unavailable. Upload reusable gameplay MP4 files and manifest.json to the backgrounds release first; YouTube downloads are currently bot-blocked." }, 409);
+    const libraryInfo: any = await library.json();
+    const libraryAssets = libraryInfo.assets || [];
+    if (!libraryAssets.some((a: any) => a.name === "manifest.json") || !libraryAssets.some((a: any) => /\.mp4$/i.test(a.name))) return jsonResp({ error: "Background library is empty. Upload gameplay MP4 files plus manifest.json to the backgrounds release before rendering." }, 409);
+
     const voiceId = String(body.voice_id || voiceConfig.voices[0].id);
     const voice = voiceConfig.voices.find((v) => v.id === voiceId);
     if (!voice) return jsonResp({ error: "voice_id: choose a supported voice." }, 400);

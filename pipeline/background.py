@@ -133,7 +133,7 @@ def generate_test_pattern_background(
         src = f"testsrc2=size=1080x1920:rate=30:duration={duration_sec + 0.25:.3f}"
         vf = "hue=h=20:s=0.85,eq=brightness=-0.12:contrast=0.9,format=yuv420p"
     else:
-        src = f"life=size=540x960:rate=30:mold=10:ratio=0.3:life_color=#38bdf8:death_color=#1e1b4b:duration={duration_sec + 0.25:.3f}"
+        src = "life=size=540x960:rate=30:mold=10:ratio=0.3:seed=42:life_color=#38bdf8:death_color=#1e1b4b"
         vf = "scale=1080:1920:flags=neighbor,format=yuv420p"
 
     subprocess.run(
@@ -144,6 +144,8 @@ def generate_test_pattern_background(
             "lavfi",
             "-i",
             src,
+            "-t",
+            f"{duration_sec + 0.25:.3f}",
             "-vf",
             vf,
             "-an",

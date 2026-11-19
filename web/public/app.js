@@ -194,7 +194,7 @@
         </label>
         <div class="row" style="margin-top:0;">
           <button type="button" class="secondary play-btn" data-src="${escapeHtml(v.sample_neutral || `/samples/${v.id}_neutral.mp3`)}">Play neutral</button>
-          <button type="button" class="secondary play-btn" data-src="${escapeHtml(v.sample_emotional || `/samples/${v.id}_emotional.mp3`)}">Play emotional</button>
+          <button type="button" class="secondary play-btn" data-src="${escapeHtml(v.sample_emotional || `/samples/${v.id}_emotional.mp3`)}">Play dramatic text</button>
         </div>
       `;
       div.querySelector('input[type="radio"]').addEventListener("change", () => {
