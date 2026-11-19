@@ -280,6 +280,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       const job = JSON.parse(raw);
       job.status = payload.status || job.status;
       job.updated_at = new Date().toISOString();
+      if (["running", "done"].includes(job.status)) job.error = null;
       if (payload.error) job.error = payload.error;
       if (payload.parts) job.parts = payload.parts;
       await env.STORYFORGE_VAULT.put(`job:${id}`, JSON.stringify(job), { expirationTtl: 30 * 24 * 3600 });
