@@ -162,7 +162,7 @@ CARD_HTML_TEMPLATE = r"""<!doctype html>
     }
     #stage {
       width: 1080px;
-      padding: 56px 135px 80px 135px;
+      padding: 80px 135px 160px 135px;
       background: transparent;
       display: inline-block;
     }
@@ -622,7 +622,7 @@ SCROLLING_POST_HTML_TEMPLATE = r"""<!doctype html>
     }
     #stage {
       width: 1080px;
-      padding: 50px 110px 60px 110px;
+      padding: 80px 110px 160px 110px;
       background: transparent;
       display: inline-block;
     }
@@ -952,7 +952,7 @@ def render_scrolling_post_assets(
     out_dir: str,
     avatars_dir: str,
     avatar_cache_dir: str | None = None,
-    stage_screen_y: int = 65,
+    stage_screen_y: int = 35,
     max_card_height: int = 900,
 ) -> dict[str, Any]:
     """

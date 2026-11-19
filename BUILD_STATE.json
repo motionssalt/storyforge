@@ -1,7 +1,7 @@
 {
   "project": "storyforge",
-  "phase": "Round 3 in progress: SF-011 fixed and verified; next SF-009 then SF-010",
-  "updated_at": "2026-11-19T15:28:00Z",
+  "phase": "Round 3 in progress: SF-011 and SF-009 fixed and verified; next SF-010",
+  "updated_at": "2026-11-19T15:31:00Z",
   "phases": {
     "1_vault_migration_and_repo_sanitization": "done",
     "2_schema_and_agent_prompt": "done",
@@ -15,7 +15,7 @@
     "10_round1_sf002_seeded_avatars_and_load_guard": "done_verified",
     "round2_settings_media": "deployed; local authenticated browser passed and live public checks passed",
     "11_round3_sf011_prompt_idea_insertion": "done_local_verified_pending_deploy",
-    "12_round3_sf009_card_shadow_clipping": "pending",
+    "12_round3_sf009_card_shadow_clipping": "done_eye_checked_verified",
     "13_round3_sf010_delete_any_task": "pending"
   },
   "decisions": [
