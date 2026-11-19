@@ -192,7 +192,7 @@ def render_all_parts(
             stage_ref[0] = stage
         print(f"[{stage}] {msg}", flush=True)
         if reporter is not None:
-            reporter.log(stage, msg, pct, level=level)
+            reporter.log(stage, msg, level=level, progress_pct=pct)
 
     def emit_pct(stage: str, pct: float) -> None:
         if stage_ref is not None:
@@ -420,7 +420,7 @@ def main() -> None:
             f"Render started: \"{prod_json.get('series_title', job_id)}\" "
             f"({len(prod_json.get('parts', []))} part(s), voice={job['voice_id']}, bg_mode={bg_mode}"
             f"{f' clip={bg_clip}' if bg_clip else ''})",
-            1.5,
+            progress_pct=1.5,
         )
         reporter.flush()
 
@@ -449,7 +449,7 @@ def main() -> None:
         )
 
         stage_ref[0] = "upload"
-        reporter.log("upload", f"Uploading {len(parts)} rendered MP4 asset(s) to GitHub Release 'renders'...", 90.0)
+        reporter.log("upload", f"Uploading {len(parts)} rendered MP4 asset(s) to GitHub Release 'renders'...", progress_pct=90.0)
         rel = ensure_renders_release(repo, gh_token)
         public_parts: list[dict[str, Any]] = []
         for idx, p in enumerate(parts):
@@ -458,7 +458,7 @@ def main() -> None:
             reporter.log(
                 "upload",
                 f"Uploaded {p['filename']} ({asset['size'] / (1024 * 1024):.1f} MB)",
-                pct,
+                progress_pct=pct,
             )
             public_parts.append(
                 {
