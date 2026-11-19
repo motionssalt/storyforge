@@ -7,54 +7,66 @@
       "name": "Andrew (US)",
       "gender": "male",
       "accent": "US",
-      "description": "Warm, natural storyteller — great all-rounder for drama.",
-      "base_wpm": 182,
-      "default_rate": "+37%"
+      "description": "Warm, natural storyteller \u2014 great all-rounder for drama.",
+      "base_wpm": 186.4,
+      "default_rate": "+34%",
+      "sample_neutral": "/samples/en-US-AndrewMultilingualNeural_neutral.mp3",
+      "sample_emotional": "/samples/en-US-AndrewMultilingualNeural_emotional.mp3"
     },
     {
       "id": "en-US-AvaMultilingualNeural",
       "name": "Ava (US)",
       "gender": "female",
       "accent": "US",
-      "description": "Expressive and crisp — strong emotional range.",
-      "base_wpm": 185,
-      "default_rate": "+35%"
+      "description": "Expressive and crisp \u2014 strong emotional range.",
+      "base_wpm": 187.7,
+      "default_rate": "+33%",
+      "sample_neutral": "/samples/en-US-AvaMultilingualNeural_neutral.mp3",
+      "sample_emotional": "/samples/en-US-AvaMultilingualNeural_emotional.mp3"
     },
     {
       "id": "en-US-BrianMultilingualNeural",
       "name": "Brian (US)",
       "gender": "male",
       "accent": "US",
-      "description": "Deep, steady narrator — ideal for workplace & legal stories.",
-      "base_wpm": 178,
-      "default_rate": "+40%"
+      "description": "Deep, steady narrator \u2014 ideal for workplace & legal stories.",
+      "base_wpm": 183.8,
+      "default_rate": "+36%",
+      "sample_neutral": "/samples/en-US-BrianMultilingualNeural_neutral.mp3",
+      "sample_emotional": "/samples/en-US-BrianMultilingualNeural_emotional.mp3"
     },
     {
       "id": "en-US-EmmaMultilingualNeural",
       "name": "Emma (US)",
       "gender": "female",
       "accent": "US",
-      "description": "Clear, conversational tone — relatable first-person POV.",
-      "base_wpm": 186,
-      "default_rate": "+34%"
+      "description": "Clear, conversational tone \u2014 relatable first-person POV.",
+      "base_wpm": 180.5,
+      "default_rate": "+39%",
+      "sample_neutral": "/samples/en-US-EmmaMultilingualNeural_neutral.mp3",
+      "sample_emotional": "/samples/en-US-EmmaMultilingualNeural_emotional.mp3"
     },
     {
       "id": "en-US-ChristopherNeural",
       "name": "Christopher (US)",
       "gender": "male",
       "accent": "US",
-      "description": "Authoritative and grounded — suits high-stakes twists.",
-      "base_wpm": 180,
-      "default_rate": "+39%"
+      "description": "Authoritative and grounded \u2014 suits high-stakes twists.",
+      "base_wpm": 183.6,
+      "default_rate": "+36%",
+      "sample_neutral": "/samples/en-US-ChristopherNeural_neutral.mp3",
+      "sample_emotional": "/samples/en-US-ChristopherNeural_emotional.mp3"
     },
     {
       "id": "en-US-EricNeural",
       "name": "Eric (US)",
       "gender": "male",
       "accent": "US",
-      "description": "Everyday conversational cadence — natural Reddit feel.",
-      "base_wpm": 184,
-      "default_rate": "+36%"
+      "description": "Everyday conversational cadence \u2014 natural Reddit feel.",
+      "base_wpm": 181.3,
+      "default_rate": "+38%",
+      "sample_neutral": "/samples/en-US-EricNeural_neutral.mp3",
+      "sample_emotional": "/samples/en-US-EricNeural_emotional.mp3"
     },
     {
       "id": "en-US-GuyNeural",
@@ -62,44 +74,54 @@
       "gender": "male",
       "accent": "US",
       "description": "Classic energetic storyteller with clear diction.",
-      "base_wpm": 188,
-      "default_rate": "+33%"
+      "base_wpm": 192.7,
+      "default_rate": "+30%",
+      "sample_neutral": "/samples/en-US-GuyNeural_neutral.mp3",
+      "sample_emotional": "/samples/en-US-GuyNeural_emotional.mp3"
     },
     {
       "id": "en-US-JennyNeural",
       "name": "Jenny (US)",
       "gender": "female",
       "accent": "US",
-      "description": "Friendly and engaging — great for family & neighbor drama.",
-      "base_wpm": 186,
-      "default_rate": "+34%"
+      "description": "Friendly and engaging \u2014 great for family & neighbor drama.",
+      "base_wpm": 183.6,
+      "default_rate": "+36%",
+      "sample_neutral": "/samples/en-US-JennyNeural_neutral.mp3",
+      "sample_emotional": "/samples/en-US-JennyNeural_emotional.mp3"
     },
     {
       "id": "en-US-AriaNeural",
       "name": "Aria (US)",
       "gender": "female",
       "accent": "US",
-      "description": "Dynamic and sharp — excels at confrontation lines.",
-      "base_wpm": 184,
-      "default_rate": "+36%"
+      "description": "Dynamic and sharp \u2014 excels at confrontation lines.",
+      "base_wpm": 174.6,
+      "default_rate": "+43%",
+      "sample_neutral": "/samples/en-US-AriaNeural_neutral.mp3",
+      "sample_emotional": "/samples/en-US-AriaNeural_emotional.mp3"
     },
     {
       "id": "en-US-SteffanNeural",
       "name": "Steffan (US)",
       "gender": "male",
       "accent": "US",
-      "description": "Mature, measured delivery — strong for mystery thrillers.",
-      "base_wpm": 176,
-      "default_rate": "+42%"
+      "description": "Mature, measured delivery \u2014 strong for mystery thrillers.",
+      "base_wpm": 175.2,
+      "default_rate": "+43%",
+      "sample_neutral": "/samples/en-US-SteffanNeural_neutral.mp3",
+      "sample_emotional": "/samples/en-US-SteffanNeural_emotional.mp3"
     },
     {
       "id": "en-GB-RyanNeural",
       "name": "Ryan (UK)",
       "gender": "male",
       "accent": "UK",
-      "description": "Crisp British narrator — sharp timing for petty revenge.",
-      "base_wpm": 184,
-      "default_rate": "+36%"
+      "description": "Crisp British narrator \u2014 sharp timing for petty revenge.",
+      "base_wpm": 182.7,
+      "default_rate": "+37%",
+      "sample_neutral": "/samples/en-GB-RyanNeural_neutral.mp3",
+      "sample_emotional": "/samples/en-GB-RyanNeural_emotional.mp3"
     },
     {
       "id": "en-GB-SoniaNeural",
@@ -107,8 +129,10 @@
       "gender": "female",
       "accent": "UK",
       "description": "Warm, articulate British storyteller.",
-      "base_wpm": 182,
-      "default_rate": "+37%"
+      "base_wpm": 183.3,
+      "default_rate": "+36%",
+      "sample_neutral": "/samples/en-GB-SoniaNeural_neutral.mp3",
+      "sample_emotional": "/samples/en-GB-SoniaNeural_emotional.mp3"
     },
     {
       "id": "en-GB-LibbyNeural",
@@ -116,17 +140,21 @@
       "gender": "female",
       "accent": "UK",
       "description": "Youthful, lively British voice.",
-      "base_wpm": 188,
-      "default_rate": "+33%"
+      "base_wpm": 156.0,
+      "default_rate": "+60%",
+      "sample_neutral": "/samples/en-GB-LibbyNeural_neutral.mp3",
+      "sample_emotional": "/samples/en-GB-LibbyNeural_emotional.mp3"
     },
     {
       "id": "en-GB-ThomasNeural",
       "name": "Thomas (UK)",
       "gender": "male",
       "accent": "UK",
-      "description": "Dry, calm British delivery — deadpan humor & tension.",
-      "base_wpm": 178,
-      "default_rate": "+40%"
+      "description": "Dry, calm British delivery \u2014 deadpan humor & tension.",
+      "base_wpm": 181.9,
+      "default_rate": "+37%",
+      "sample_neutral": "/samples/en-GB-ThomasNeural_neutral.mp3",
+      "sample_emotional": "/samples/en-GB-ThomasNeural_emotional.mp3"
     },
     {
       "id": "en-AU-WilliamNeural",
@@ -134,8 +162,10 @@
       "gender": "male",
       "accent": "AU",
       "description": "Relaxed Australian narrator with clean pacing.",
-      "base_wpm": 182,
-      "default_rate": "+37%"
+      "base_wpm": 203.8,
+      "default_rate": "+23%",
+      "sample_neutral": "/samples/en-AU-WilliamNeural_neutral.mp3",
+      "sample_emotional": "/samples/en-AU-WilliamNeural_emotional.mp3"
     },
     {
       "id": "en-CA-LiamNeural",
@@ -143,8 +173,10 @@
       "gender": "male",
       "accent": "CA",
       "description": "Clean North American cadence, easy to listen to.",
-      "base_wpm": 185,
-      "default_rate": "+35%"
+      "base_wpm": 195.5,
+      "default_rate": "+28%",
+      "sample_neutral": "/samples/en-CA-LiamNeural_neutral.mp3",
+      "sample_emotional": "/samples/en-CA-LiamNeural_emotional.mp3"
     }
   ]
 }
