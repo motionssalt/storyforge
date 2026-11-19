@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>StoryForge</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 820px; margin: 0 auto; padding: 16px; line-height: 1.45; color: #111; background: #fafafa; }
+    h1, h2, h3 { margin: 0 0 8px 0; }
+    section, .card { background: #fff; border: 1px solid #d4d4d8; padding: 16px; margin-bottom: 16px; }
+    label { display: block; font-weight: 600; margin: 10px 0 4px; }
+    input[type="text"], input[type="password"], input[type="number"], select, textarea {
+      width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #a1a1aa; font-family: inherit; font-size: 14px;
+    }
+    textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    button { padding: 8px 14px; font-size: 14px; cursor: pointer; border: 1px solid #52525b; background: #18181b; color: #fff; }
+    button.secondary { background: #f4f4f5; color: #18181b; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 600px) { .grid2 { grid-template-columns: 1fr; } }
+    .err { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; padding: 8px; margin-top: 8px; font-size: 13px; }
+    .ok { color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 8px; margin-top: 8px; font-size: 13px; }
+    .muted { color: #52525b; font-size: 13px; }
+    .voice-item { border: 1px solid #e4e4e7; padding: 10px; margin-bottom: 8px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+    .voice-item.selected { border-color: #18181b; background: #f4f4f5; }
+    .hidden { display: none; }
+    pre { white-space: pre-wrap; word-break: break-word; background: #f4f4f5; padding: 8px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header class="row" style="justify-content: space-between; margin-bottom: 14px;">
+    <div>
+      <h1>StoryForge</h1>
+      <div class="muted">Reddit-story vertical video builder</div>
+    </div>
+    <button id="logoutBtn" class="secondary hidden" type="button">Log out</button>
+  </header>
+
+  <section id="loginView">
+    <h2>Login</h2>
+    <form id="loginForm">
+      <label for="pwInput">Password</label>
+      <input id="pwInput" type="password" required autocomplete="current-password" />
+      <div class="row">
+        <button type="submit">Unlock</button>
+      </div>
+      <div id="loginErr" class="err hidden"></div>
+    </form>
+  </section>
+
+  <main id="appView" class="hidden">
+    <section>
+      <h2>1. Story Idea &rarr; Agent Prompt</h2>
+      <label for="ideaInput">Story idea (real or made up)</label>
+      <textarea id="ideaInput" rows="4" placeholder="Paste a story idea or premise..."></textarea>
+      <div class="grid2">
+        <div>
+          <label for="wpmInput">Target pace (WPM)</label>
+          <input id="wpmInput" type="number" min="150" max="350" value="250" />
+        </div>
+        <div style="display:flex; align-items:flex-end;">
+          <button id="buildPromptBtn" type="button">Build prompt</button>
+        </div>
+      </div>
+      <div id="promptErr" class="err hidden"></div>
+      <div id="promptWrap" class="hidden" style="margin-top:12px;">
+        <label for="promptOutput">Ready-to-copy agent prompt</label>
+        <textarea id="promptOutput" class="mono" rows="8" readonly></textarea>
+        <div class="row">
+          <button id="copyPromptBtn" type="button" class="secondary">Copy prompt</button>
+          <span id="copyStatus" class="muted"></span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>2. Production JSON</h2>
+      <label for="jsonInput">Paste AI-generated production JSON</label>
+      <textarea id="jsonInput" class="mono" rows="10" placeholder='{"series_title": "...", "format": "single", "parts": [...]}'></textarea>
+      <div class="row">
+        <button id="validateBtn" type="button" class="secondary">Validate JSON</button>
+      </div>
+      <div id="jsonStatus"></div>
+    </section>
+
+    <section>
+      <h2>3. Voice Picker</h2>
+      <div class="muted" style="margin-bottom:8px;">Preview neutral and emotional clips before choosing a voice.</div>
+      <audio id="samplePlayer" controls class="hidden" style="width:100%; margin-bottom:10px;"></audio>
+      <div id="voiceList">Loading voices...</div>
+    </section>
+
+    <section>
+      <h2>4. Render Settings</h2>
+      <div class="grid2">
+        <div>
+          <label for="speedInput">Voice speed (Edge TTS rate)</label>
+          <input id="speedInput" type="text" value="+37%" placeholder="+37%" />
+        </div>
+        <div>
+          <label for="bgModeSelect">Background footage</label>
+          <select id="bgModeSelect">
+            <option value="sequential">Next in sequence (default)</option>
+            <option value="manual">Manual clip index</option>
+          </select>
+        </div>
+      </div>
+      <div id="manualBgWrap" class="hidden">
+        <label for="bgIndexInput">Clip index (0-based)</label>
+        <input id="bgIndexInput" type="number" min="0" value="0" />
+      </div>
+      <div class="row">
+        <button id="renderBtn" type="button">Render Video(s)</button>
+        <span id="nextBgHint" class="muted"></span>
+      </div>
+      <div id="renderErr" class="err hidden"></div>
+    </section>
+
+    <section>
+      <h2>5. Render Jobs &amp; Downloads</h2>
+      <div class="row" style="margin-top:0; margin-bottom:10px;">
+        <button id="refreshJobsBtn" type="button" class="secondary">Refresh jobs</button>
+      </div>
+      <div id="jobsList" class="muted">No jobs yet.</div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

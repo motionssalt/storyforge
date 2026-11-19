@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.tmp*/
+.wrangler/
+node_modules/
+.env
+*.mp4
+*.wav

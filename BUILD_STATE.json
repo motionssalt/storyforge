@@ -1,0 +1,23 @@
+{
+  "project": "storyforge",
+  "phase": "Phase 1: Working End-to-End",
+  "updated_at": "2026-11-19T02:20:00Z",
+  "phases": {
+    "1_vault_migration_and_repo_sanitization": "in_progress",
+    "2_schema_and_agent_prompt": "done",
+    "3_pipeline_and_assets": "done",
+    "4_cloudflare_site_and_worker": "in_progress",
+    "5_voice_samples_calibration": "pending",
+    "6_background_footage_library": "pending",
+    "7_e2e_sample_render_and_eye_check": "pending"
+  },
+  "decisions": [
+    "Stored private research vault (skill/, analysis/, data/, old BUILD_STATE.json, AGENT_PROMPT) in Cloudflare Workers KV namespace 'storyforge-vault' (contact sheets chunked into <= 4.5 MB zips under KV's 25 MiB per-value limit).",
+    "Built web frontend + backend API as Cloudflare Pages + Pages Functions in web/ (single origin, no CORS issues, KV binding + Worker secrets).",
+    "Bundled 60 DiceBear SVG avatars in assets/avatars/ and OFL fonts LilitaOne-Regular.ttf + Bangers-Regular.ttf in assets/fonts/ so rendering requires zero external font/avatar network calls.",
+    "Implemented swappable TTSEngine protocol in pipeline/tts_engine.py with EdgeTTSEngine (Edge WordBoundary with automatic faster-whisper base.en fallback) and VoiceStudioCoupledSpeedupHook reserved for Phase 2.",
+    "Security residual risk note: After orphan-branch history rewrite and deleting old branches, tags, and v1 release, old commit SHAs from prior history may remain reachable by exact SHA on GitHub until GitHub runs repository garbage collection."
+  ],
+  "blockers": [],
+  "next_action": "Verify vault:manifest.json in storyforge-vault KV, push orphan main branch to motionssalt/storyforge, delete v1 tag/release, make repo public, set secrets, run workflows."
+}

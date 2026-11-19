@@ -1,0 +1,7 @@
+name = "storyforge"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "public"
+
+[[kv_namespaces]]
+binding = "STORYFORGE_VAULT"
+id = "db3e4ce60c4746c6aae86d0377b08680"

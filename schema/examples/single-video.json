@@ -1,0 +1,170 @@
+{
+  "series_title": "The Uncashed Deposit Receipt",
+  "format": "single",
+  "parts": [
+    {
+      "part_number": 1,
+      "title": "My neighbor asked me to sign a blank receipt for a kitchen remodel she never paid for",
+      "hashtags": [
+        "#redditstories",
+        "#storytime",
+        "#pettyrevenge",
+        "#aita",
+        "#fyp"
+      ],
+      "story_so_far": "Standalone story: A carpenter keeps a carbon-copy invoice book after a neighbor tries to claim a free kitchen remodel in small claims court.",
+      "lines": [
+        {
+          "id": "L1",
+          "text": "My neighbor asked me to sign a blank receipt for a kitchen remodel she never paid for.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L2",
+          "text": "I run a two-person cabinet shop out of my garage, and three weeks ago Mrs. Halvorsen next door begged me to replace four water-damaged drawers before her daughter flew in from Denver.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L3",
+          "text": "She swore she would pay the full nine hundred dollars in cash the moment the last hinge clicked shut.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L4",
+          "text": "Because she lived six steps across our shared driveway, I skipped the usual deposit and worked both Saturday and Sunday to finish on time.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L5",
+          "text": "Monday morning, I knocked with the yellow carbon-copy invoice in hand.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L6",
+          "text": "She opened the door holding an empty folder and smiled like she was doing me a favor.",
+          "emotion": "sarcastic"
+        },
+        {
+          "id": "L7",
+          "text": "She said her homeowner's insurance needed a paid-in-full receipt first, and once I signed it, she would hand over the cash by Friday.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L8",
+          "text": "When I told her I only mark an invoice paid after the money lands in my palm, her smile disappeared instantly.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L9",
+          "text": "She slammed the door and shouted through the glass that she would tell the whole HOA I damaged her cabinets on purpose.",
+          "emotion": "angry"
+        },
+        {
+          "id": "L10",
+          "text": "I walked straight back to my garage, wrote 'VOID - UNPAID' across the top carbon sheet, and photographed it beside Monday's mail.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L11",
+          "text": "Two weeks later, a process server handed me a small-claims summons claiming I had accepted nine hundred dollars and left her kitchen unfinished.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L12",
+          "text": "In court, Mrs. Halvorsen proudly handed the judge a crisp white sheet with a forged signature that looked suspiciously like my initials.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L13",
+          "text": "The judge turned to me, tapped his pen, and asked why I had taken a neighbor's money without finishing the job. [pause]",
+          "emotion": "tense",
+          "markers": ["pause"]
+        },
+        {
+          "id": "L14",
+          "text": "I opened my binder and placed the original pink carbon sheet directly on the clerk's desk.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L15",
+          "text": "Every sheet in my invoice book has a stamped serial number at the bottom corner, and Mrs. Halvorsen's printout stopped right above the serial line because she had cropped out my giant 'VOID' stamp.",
+          "emotion": "excited"
+        },
+        {
+          "id": "L16",
+          "text": "Better yet, my doorbell camera had recorded her yelling through the glass on Monday morning that she hadn't paid me a cent yet.",
+          "emotion": "excited"
+        },
+        {
+          "id": "L17",
+          "text": "The judge stared at the serial numbers, looked over his glasses at Mrs. Halvorsen, and dismissed her claim on the spot while ordering her to pay my full nine hundred dollars plus court fees. [sigh]",
+          "emotion": "sad",
+          "markers": ["sigh"]
+        },
+        {
+          "id": "L18",
+          "text": "She paid with a cashier's check the next morning, and now she closes her blinds every time I back my truck down the driveway.",
+          "emotion": "calm"
+        }
+      ],
+      "cards": [
+        {
+          "from_line": "L1",
+          "to_line": "L1",
+          "duration_sec": 2.8,
+          "card": {
+            "type": "post",
+            "theme": "dark",
+            "subreddit": "r/pettyrevenge",
+            "username": "u/oak_cabinet_co",
+            "age": "6h",
+            "awards": [{ "type": "gold", "count": 2 }],
+            "nsfw": false,
+            "verified": true,
+            "title": "Neighbor asked me to sign a blank receipt for work she never paid for, then took me to court with a cropped fake.",
+            "upvotes": "18.4K",
+            "comments_count": "1.2K",
+            "show_footer": true
+          }
+        },
+        {
+          "from_line": "L11",
+          "to_line": "L13",
+          "card": {
+            "type": "comment",
+            "theme": "dark",
+            "username": "u/carbon_copy_kid",
+            "age": "4h",
+            "verified": false,
+            "awards": [{ "type": "helpful", "label": "Helpful" }],
+            "body": [
+              "Rule number one in any trade: never mark an invoice PAID until the funds actually clear.",
+              "People who rush you to sign 'just for insurance' already have a plan for that paper."
+            ],
+            "upvotes": "4.6K",
+            "show_footer": true
+          }
+        },
+        {
+          "from_line": "L15",
+          "to_line": "L17",
+          "card": {
+            "type": "reply",
+            "theme": "dark",
+            "username": "u/smallclaims_clerk",
+            "age": "3h",
+            "verified": true,
+            "body": "Serial-numbered carbon books save more contractors than lawyers do.",
+            "reply": {
+              "username": "u/oak_cabinet_co",
+              "age": "2h",
+              "verified": true,
+              "awards": [{ "type": "heart", "count": 1 }],
+              "body": "That pink carbon page paid for itself twenty times over in five minutes."
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

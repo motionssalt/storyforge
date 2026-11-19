@@ -1,0 +1,40 @@
+name: Calibrate Voices & Generate Samples
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  samples:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install FFmpeg & edge-tts
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          pip install "edge-tts>=7.0.0"
+
+      - name: Calibrate voices and generate samples
+        run: python pipeline/calibrate_voices.py
+
+      - name: Commit samples and calibrated voices.json
+        run: |
+          git config user.name "storyforge-bot"
+          git config user.email "bot@motionssalt.local"
+          git add voices/voices.json web/public/voices.json web/public/samples/
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: calibrate voices and regenerate voice samples"
+            git push
+          else
+            echo "No changes to voice samples."
+          fi

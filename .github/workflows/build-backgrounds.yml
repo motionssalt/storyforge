@@ -1,0 +1,37 @@
+name: Build Background Footage Library
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_clips:
+        description: "Number of verified free-to-reuse clips to collect"
+        required: false
+        default: "12"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  backgrounds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install FFmpeg & yt-dlp
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          pip install -U yt-dlp
+
+      - name: Fetch and upload free-to-reuse gameplay backgrounds
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_CLIPS: ${{ github.event.inputs.target_clips }}
+        run: python pipeline/build_backgrounds.py

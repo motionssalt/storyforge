@@ -1,0 +1,150 @@
+{
+  "target_wpm_default": 250,
+  "max_rate_pct": 65,
+  "voices": [
+    {
+      "id": "en-US-AndrewMultilingualNeural",
+      "name": "Andrew (US)",
+      "gender": "male",
+      "accent": "US",
+      "description": "Warm, natural storyteller — great all-rounder for drama.",
+      "base_wpm": 182,
+      "default_rate": "+37%"
+    },
+    {
+      "id": "en-US-AvaMultilingualNeural",
+      "name": "Ava (US)",
+      "gender": "female",
+      "accent": "US",
+      "description": "Expressive and crisp — strong emotional range.",
+      "base_wpm": 185,
+      "default_rate": "+35%"
+    },
+    {
+      "id": "en-US-BrianMultilingualNeural",
+      "name": "Brian (US)",
+      "gender": "male",
+      "accent": "US",
+      "description": "Deep, steady narrator — ideal for workplace & legal stories.",
+      "base_wpm": 178,
+      "default_rate": "+40%"
+    },
+    {
+      "id": "en-US-EmmaMultilingualNeural",
+      "name": "Emma (US)",
+      "gender": "female",
+      "accent": "US",
+      "description": "Clear, conversational tone — relatable first-person POV.",
+      "base_wpm": 186,
+      "default_rate": "+34%"
+    },
+    {
+      "id": "en-US-ChristopherNeural",
+      "name": "Christopher (US)",
+      "gender": "male",
+      "accent": "US",
+      "description": "Authoritative and grounded — suits high-stakes twists.",
+      "base_wpm": 180,
+      "default_rate": "+39%"
+    },
+    {
+      "id": "en-US-EricNeural",
+      "name": "Eric (US)",
+      "gender": "male",
+      "accent": "US",
+      "description": "Everyday conversational cadence — natural Reddit feel.",
+      "base_wpm": 184,
+      "default_rate": "+36%"
+    },
+    {
+      "id": "en-US-GuyNeural",
+      "name": "Guy (US)",
+      "gender": "male",
+      "accent": "US",
+      "description": "Classic energetic storyteller with clear diction.",
+      "base_wpm": 188,
+      "default_rate": "+33%"
+    },
+    {
+      "id": "en-US-JennyNeural",
+      "name": "Jenny (US)",
+      "gender": "female",
+      "accent": "US",
+      "description": "Friendly and engaging — great for family & neighbor drama.",
+      "base_wpm": 186,
+      "default_rate": "+34%"
+    },
+    {
+      "id": "en-US-AriaNeural",
+      "name": "Aria (US)",
+      "gender": "female",
+      "accent": "US",
+      "description": "Dynamic and sharp — excels at confrontation lines.",
+      "base_wpm": 184,
+      "default_rate": "+36%"
+    },
+    {
+      "id": "en-US-SteffanNeural",
+      "name": "Steffan (US)",
+      "gender": "male",
+      "accent": "US",
+      "description": "Mature, measured delivery — strong for mystery thrillers.",
+      "base_wpm": 176,
+      "default_rate": "+42%"
+    },
+    {
+      "id": "en-GB-RyanNeural",
+      "name": "Ryan (UK)",
+      "gender": "male",
+      "accent": "UK",
+      "description": "Crisp British narrator — sharp timing for petty revenge.",
+      "base_wpm": 184,
+      "default_rate": "+36%"
+    },
+    {
+      "id": "en-GB-SoniaNeural",
+      "name": "Sonia (UK)",
+      "gender": "female",
+      "accent": "UK",
+      "description": "Warm, articulate British storyteller.",
+      "base_wpm": 182,
+      "default_rate": "+37%"
+    },
+    {
+      "id": "en-GB-LibbyNeural",
+      "name": "Libby (UK)",
+      "gender": "female",
+      "accent": "UK",
+      "description": "Youthful, lively British voice.",
+      "base_wpm": 188,
+      "default_rate": "+33%"
+    },
+    {
+      "id": "en-GB-ThomasNeural",
+      "name": "Thomas (UK)",
+      "gender": "male",
+      "accent": "UK",
+      "description": "Dry, calm British delivery — deadpan humor & tension.",
+      "base_wpm": 178,
+      "default_rate": "+40%"
+    },
+    {
+      "id": "en-AU-WilliamNeural",
+      "name": "William (AU)",
+      "gender": "male",
+      "accent": "AU",
+      "description": "Relaxed Australian narrator with clean pacing.",
+      "base_wpm": 182,
+      "default_rate": "+37%"
+    },
+    {
+      "id": "en-CA-LiamNeural",
+      "name": "Liam (CA)",
+      "gender": "male",
+      "accent": "CA",
+      "description": "Clean North American cadence, easy to listen to.",
+      "base_wpm": 185,
+      "default_rate": "+35%"
+    }
+  ]
+}
