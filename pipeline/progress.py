@@ -54,7 +54,7 @@ class TaskReporter:
                 self._buffer.append(
                     {
                         "ts": utc_now_iso(),
-                        "level": level_str,
+                        "level": str(level or "info"),
                         "stage": stage,
                         "message": message,
                         "progress_pct": round(self._progress_pct, 1),
