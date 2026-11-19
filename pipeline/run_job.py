@@ -255,7 +255,7 @@ def main() -> None:
         worker_post_status(worker_url, secret, {"job_id": job_id, "status": "running"})
         job = worker_get_job(worker_url, job_id, secret)
         if not test_bg and job.get("background_mode", "sequential") == "sequential":
-            req = urllib.request.Request(worker_url.rstrip("/") + "/api/internal/background-index", headers={"X-Internal-Secret": secret})
+            req = urllib.request.Request(worker_url.rstrip("/") + "/api/internal/background-index", headers={"X-Internal-Secret": secret, "User-Agent": "StoryForge-Runner"})
             with urllib.request.urlopen(req, timeout=30) as response:
                 job["background_index"] = json.loads(response.read())["index"]
 
