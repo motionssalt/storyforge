@@ -5,14 +5,18 @@ import {
   getSettings,
   getTaskFull,
   getTaskLogs,
+  isTaskDeleted,
   listTasksFull,
   listZernioAccounts,
   listZernioKeys,
   saveSettings,
   setRuntimeState,
+  setTaskWorkflowRunId,
 } from "../../shared/db";
 import {
   cleanupPublishedTask,
+  deleteGitHubRenderAssetsForTask,
+  deleteTaskById,
   initializePublishingForTask,
   processPublishingTick,
   retryFailedTargetsForTask,
@@ -554,6 +558,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     if (path === "/api/internal/job" && request.method === "GET") {
       const id = url.searchParams.get("id");
       if (!id) return jsonResp({ error: "Missing id" }, 400);
+      if (await isTaskDeleted(db, id)) {
+        return jsonResp({ error: "Task was deleted", deleted: true }, 410);
+      }
       const row = await db.prepare("SELECT * FROM tasks WHERE task_id = ?").bind(id).first<any>();
       if (!row) {
         // Legacy KV fallback if any old job still triggered
@@ -577,6 +584,18 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       const payload: any = await request.json();
       const taskId = String(payload.task_id || "");
       if (!taskId) return jsonResp({ error: "Missing task_id" }, 400);
+
+      // SF-010: Never resurrect or append logs for deleted/missing tasks
+      if (await isTaskDeleted(db, taskId)) {
+        return jsonResp({ ok: true, ignored: true, deleted: true });
+      }
+      const existingTask = await db.prepare("SELECT task_id FROM tasks WHERE task_id = ?").bind(taskId).first<{ task_id: string }>();
+      if (!existingTask) {
+        return jsonResp({ ok: true, ignored: true, deleted: true });
+      }
+      if (payload.github_run_id) {
+        await setTaskWorkflowRunId(db, taskId, payload.github_run_id);
+      }
 
       const nowIso = new Date().toISOString();
       const logs: any[] = Array.isArray(payload.logs) ? payload.logs : [];
@@ -623,8 +642,24 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       const id = String(payload.job_id || "");
       if (!id) return jsonResp({ error: "Missing job_id" }, 400);
 
+      // SF-010: Ignore late callbacks for deleted tasks and clean up any late-uploaded render assets
+      if (await isTaskDeleted(db, id)) {
+        if (Array.isArray(payload.parts) && payload.parts.length > 0) {
+          try {
+            await deleteGitHubRenderAssetsForTask(env, payload.parts, id);
+          } catch {
+            /* best-effort cleanup of late upload */
+          }
+        }
+        return jsonResp({ ok: true, ignored: true, deleted: true });
+      }
+
       const task = await db.prepare("SELECT * FROM tasks WHERE task_id = ?").bind(id).first<any>();
-      if (!task) return jsonResp({ error: "Job not found" }, 404);
+      if (!task) return jsonResp({ ok: true, ignored: true, deleted: true });
+
+      if (payload.github_run_id) {
+        await setTaskWorkflowRunId(db, id, payload.github_run_id);
+      }
 
       const nowIso = new Date().toISOString();
       const incomingStatus = String(payload.status || task.status);
@@ -1452,6 +1487,28 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const res = await cleanupPublishedTask(env, taskId);
     if (!res.removed) return jsonResp({ error: "Cleanup requires a real, confirmed publish for every part and target account." }, 409);
     return jsonResp({ ok: true, ...res });
+  }
+
+  // --- SF-010: Delete any task (idempotent, state-aware, partial-failure tolerant) ---
+  if (
+    (path === "/api/tasks" && request.method === "DELETE") ||
+    (path === "/api/tasks/delete" && request.method === "POST")
+  ) {
+    let taskId = String(url.searchParams.get("task_id") || "").trim();
+    if (!taskId) {
+      try {
+        const body: any = await request.json();
+        taskId = String(body.task_id || "").trim();
+      } catch {
+        /* ignore */
+      }
+    }
+    if (!taskId) return jsonResp({ error: "Missing task_id" }, 400);
+    const res = await deleteTaskById(env, taskId);
+    return jsonResp(
+      res.ok ? res : { ...res, error: res.failures.join("; ") || "Partial delete failure" },
+      res.ok ? 200 : 500
+    );
   }
 
   if (path === "/api/test/mock-behavior" && request.method === "POST") {

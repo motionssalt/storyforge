@@ -43,7 +43,18 @@
   const refreshJobsBtn = document.getElementById("refreshJobsBtn");
   const runTickBtn = document.getElementById("runTickBtn");
   const tickStatus = document.getElementById("tickStatus");
+  const taskDeleteNotice = document.getElementById("taskDeleteNotice");
   const jobsList = document.getElementById("jobsList");
+
+  const deleteConfirmModal = document.getElementById("deleteConfirmModal");
+  const deleteConfirmTitle = document.getElementById("deleteConfirmTitle");
+  const deleteConfirmBody = document.getElementById("deleteConfirmBody");
+  const deleteCancelBtn = document.getElementById("deleteCancelBtn");
+  const deleteConfirmBtn = document.getElementById("deleteConfirmBtn");
+
+  const lastTasksById = new Map();
+  const deletingTasks = new Set();
+  let pendingDeleteTaskId = null;
 
   // Settings View controls
   const setDefaultVoice = document.getElementById("setDefaultVoice");
@@ -1070,8 +1081,8 @@
 
     let badgeCls = "badge";
     if (j.status === "done" || j.status === "published") badgeCls = "badge ok";
-    else if (j.status === "failed" || j.status === "publish_failed") badgeCls = "badge err";
-    else if (["waiting_for_keys", "publish_failed_partial", "publish_skipped", "publish_unconfirmed", "cleanup_pending"].includes(j.status)) badgeCls = "badge warn";
+    else if (j.status === "failed" || j.status === "publish_failed" || j.status === "delete_failed") badgeCls = "badge err";
+    else if (["waiting_for_keys", "publish_failed_partial", "publish_skipped", "publish_unconfirmed", "cleanup_pending", "deleting"].includes(j.status)) badgeCls = "badge warn";
 
     const modeBits = [];
     if (j.kind === "render") {
@@ -1157,6 +1168,10 @@
       ? `<button type="button" class="retry-pub-btn" data-id="${escapeHtml(j.task_id)}">Retry Failed Accounts</button>`
       : "";
 
+    const isDeleting = deletingTasks.has(j.task_id) || j.status === "deleting";
+    const deleteLabel = isDeleting ? "Deleting..." : j.status === "delete_failed" ? "Retry Delete" : "Delete";
+    const deleteBtn = `<button type="button" class="danger delete-task-btn" data-id="${escapeHtml(j.task_id)}"${isDeleting ? " disabled" : ""}>${deleteLabel}</button>`;
+
     const errHtml = j.error ? `<div class="err">${escapeHtml(j.error)}</div>` : "";
     const waitHint =
       j.status === "waiting_for_keys"
@@ -1173,6 +1188,7 @@
           <div class="row" style="margin-top:0;">
             ${retryBtn}
             <button type="button" class="secondary toggle-logs-btn" data-id="${escapeHtml(j.task_id)}">${logsOpen ? "Hide logs" : "Show logs"}</button>
+            ${deleteBtn}
           </div>
         </div>
         <div class="muted" style="margin-top:4px;">
@@ -1195,6 +1211,141 @@
       </div>
     `;
   }
+
+  function buildDeleteConfirmHtml(task) {
+    const title = task.series_title || task.task_id;
+    const parts = task.parts || [];
+    const targets = task.publish_targets || [];
+    const isSeries = parts.length > 1;
+    const st = String(task.status || "");
+
+    const bullets = [];
+    if (isSeries) {
+      bullets.push(`This is a ${parts.length}-part series. Deleting it removes all ${parts.length} parts.`);
+    }
+
+    if (st === "queued" || st === "running") {
+      bullets.push("The running/queued GitHub Actions workflow will be cancelled and live logging will stop.");
+      bullets.push("Any rendered video or thumbnail files already uploaded for this task will be deleted.");
+    } else if (st === "queued_publish" || st === "scheduled" || st === "waiting_for_keys") {
+      bullets.push("It will be removed from the queue/schedule, including any not-yet-sent Part 2.");
+      bullets.push("Rendered video and thumbnail files for this task will be deleted. Other tasks' cadence and series spacing will keep working.");
+    } else if (
+      ["publishing", "uploading", "processing", "published", "publish_failed_partial", "publish_skipped", "publish_unconfirmed", "cleanup_pending"].includes(st)
+    ) {
+      const liveTargets = targets.filter((t) => t.status === "published" && !task.dry_run);
+      const pendingTargets = targets.filter((t) =>
+        ["pending", "scheduled", "publishing", "uploading", "processing"].includes(t.status)
+      );
+      if (pendingTargets.length > 0) {
+        bullets.push("Not-yet-live or scheduled Zernio posts (and any not-yet-sent Part 2) will be cancelled if supported by Zernio.");
+      }
+      if (liveTargets.length > 0) {
+        const liveList = liveTargets
+          .map((t) => `Part ${t.part_number} on ${t.platform} (${t.account_name})`)
+          .join(", ");
+        bullets.push(`Already live and CANNOT be taken back: ${liveList}.`);
+      }
+      bullets.push("The task record, logs, and rendered files in the renders Release will be removed.");
+    } else if (st === "delete_failed") {
+      bullets.push("A previous delete step failed. Retrying will clean up any remaining workflow runs, Zernio posts, render files, and task records.");
+    } else {
+      bullets.push("The task record, logs, and any rendered video or thumbnail files in the renders Release will be permanently removed.");
+    }
+
+    const listHtml = bullets.map((b) => `<li style="margin-bottom:6px;">${escapeHtml(b)}</li>`).join("");
+    return `
+      <p style="margin:0 0 8px;">Delete <strong>${escapeHtml(title)}</strong> (<span class="mono">${escapeHtml(task.task_id)}</span>, status: <strong>${escapeHtml(st)}</strong>)?</p>
+      <ul style="margin:0 0 8px; padding-left:18px;">${listHtml}</ul>
+      <p class="muted" style="margin:0;">This cannot be undone.</p>
+    `;
+  }
+
+  function openDeleteConfirm(taskId) {
+    const task = lastTasksById.get(taskId);
+    if (!task || deletingTasks.has(taskId)) return;
+    pendingDeleteTaskId = taskId;
+    deleteConfirmTitle.textContent = task.status === "delete_failed" ? "Retry Task Deletion?" : "Delete Task?";
+    deleteConfirmBody.innerHTML = buildDeleteConfirmHtml(task);
+    deleteConfirmBtn.disabled = false;
+    deleteConfirmBtn.textContent = task.status === "delete_failed" ? "Retry Delete" : "Delete permanently";
+    deleteConfirmModal.classList.remove("hidden");
+  }
+
+  function closeDeleteConfirm() {
+    pendingDeleteTaskId = null;
+    deleteConfirmModal.classList.add("hidden");
+  }
+
+  deleteCancelBtn.addEventListener("click", closeDeleteConfirm);
+  deleteConfirmModal.addEventListener("click", (e) => {
+    if (e.target === deleteConfirmModal && !deleteConfirmBtn.disabled) {
+      closeDeleteConfirm();
+    }
+  });
+
+  deleteConfirmBtn.addEventListener("click", async () => {
+    const taskId = pendingDeleteTaskId;
+    if (!taskId || deletingTasks.has(taskId)) return;
+    const task = lastTasksById.get(taskId);
+    const title = task?.series_title || taskId;
+
+    deletingTasks.add(taskId);
+    deleteConfirmBtn.disabled = true;
+    deleteConfirmBtn.textContent = "Deleting...";
+    openLogs.delete(taskId);
+    logCache.delete(taskId);
+
+    try {
+      const r = await api("/api/tasks/delete", {
+        method: "POST",
+        body: JSON.stringify({ task_id: taskId }),
+      });
+      closeDeleteConfirm();
+
+      if (r.ok) {
+        const d = r.data || {};
+        const notes = [];
+        if (d.already_deleted) {
+          notes.push(`Task "${title}" was already deleted.`);
+        } else {
+          notes.push(`Deleted "${title}".`);
+          if (Array.isArray(d.cancelled_runs) && d.cancelled_runs.length) {
+            notes.push(`Cancelled workflow run(s): #${d.cancelled_runs.join(", #")}.`);
+          }
+          if (Array.isArray(d.cancelled_zernio_posts) && d.cancelled_zernio_posts.length) {
+            notes.push(`Cancelled ${d.cancelled_zernio_posts.length} Zernio post(s).`);
+          }
+          if (Array.isArray(d.deleted_assets) && d.deleted_assets.length) {
+            notes.push(`Removed ${d.deleted_assets.length} render file(s).`);
+          }
+        }
+        const live = Array.isArray(d.already_live_posts) ? d.already_live_posts : [];
+        if (live.length > 0) {
+          const liveSummary = live
+            .map((p) => `Part ${p.part_number} on ${p.platform} (${p.account_name})`)
+            .join(", ");
+          notes.push(`Already live (cannot be taken back): ${liveSummary}.`);
+          taskDeleteNotice.className = "warn";
+        } else {
+          taskDeleteNotice.className = "ok";
+        }
+        taskDeleteNotice.textContent = notes.join(" ");
+        taskDeleteNotice.classList.remove("hidden");
+      } else {
+        const failures = Array.isArray(r.data?.failures) && r.data.failures.length
+          ? r.data.failures.join("; ")
+          : r.data?.error || "Delete failed";
+        taskDeleteNotice.className = "err";
+        taskDeleteNotice.textContent = `Could not finish deleting "${title}": ${failures}. Tap "Retry Delete" on the task to try again.`;
+        taskDeleteNotice.classList.remove("hidden");
+      }
+      await loadJobs();
+    } finally {
+      deletingTasks.delete(taskId);
+      deleteConfirmBtn.disabled = false;
+    }
+  });
 
   function wireTaskButtons(container) {
     container.querySelectorAll(".toggle-logs-btn").forEach((btn) => {
@@ -1219,6 +1370,11 @@
         await loadJobs();
       });
     });
+    container.querySelectorAll(".delete-task-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        openDeleteConfirm(btn.dataset.id);
+      });
+    });
     container.querySelectorAll(".log-box").forEach((box) => {
       box.scrollTop = box.scrollHeight;
     });
@@ -1229,9 +1385,20 @@
     if (!r.ok) return;
     nextBgHint.textContent = `Next sequential background clip #${r.data.next_background_index ?? 0}`;
     const allTasks = r.data.tasks || r.data.jobs || [];
+    lastTasksById.clear();
+    for (const t of allTasks) lastTasksById.set(t.task_id, t);
 
-    // Fetch incremental logs for all active or user-opened tasks
+    // Drop stale openLogs/logCache for tasks that no longer exist
+    for (const id of Array.from(openLogs)) {
+      if (!lastTasksById.has(id)) {
+        openLogs.delete(id);
+        logCache.delete(id);
+      }
+    }
+
+    // Fetch incremental logs for all active or user-opened tasks (never for deleting tasks)
     const tasksToFetchLogs = allTasks.filter((t) => {
+      if (deletingTasks.has(t.task_id) || t.status === "deleting") return false;
       const active = ["queued", "running", "publishing", "uploading", "processing", "queued_publish", "scheduled"].includes(t.status);
       return active || openLogs.has(t.task_id);
     });

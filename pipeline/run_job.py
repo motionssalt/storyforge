@@ -409,7 +409,11 @@ def main() -> None:
     stage_ref = ["job_started"]
 
     try:
-        worker_post_status(worker_url, secret, {"job_id": job_id, "status": "running"})
+        gh_run_id = os.environ.get("GITHUB_RUN_ID")
+        init_payload: dict[str, Any] = {"job_id": job_id, "status": "running"}
+        if gh_run_id:
+            init_payload["github_run_id"] = gh_run_id
+        worker_post_status(worker_url, secret, init_payload)
         job = worker_get_job(worker_url, job_id, secret)
 
         prod_json = job["production_json"]
@@ -423,6 +427,9 @@ def main() -> None:
             progress_pct=1.5,
         )
         reporter.flush()
+        if reporter.deleted:
+            print("JOB DELETED BEFORE RENDER:", job_id)
+            return
 
         if not test_bg and bg_mode == "sequential":
             req = urllib.request.Request(
@@ -447,6 +454,10 @@ def main() -> None:
             reporter=reporter,
             stage_ref=stage_ref,
         )
+
+        if reporter.deleted:
+            print("JOB DELETED DURING RENDER; SKIPPING UPLOAD:", job_id)
+            return
 
         stage_ref[0] = "upload"
         reporter.log("upload", f"Uploading {len(parts)} rendered MP4 asset(s) to GitHub Release 'renders'...", progress_pct=90.0)

@@ -65,6 +65,48 @@ export async function setRuntimeState(db: D1Database, key: string, value: string
     .run();
 }
 
+export async function deleteRuntimeState(db: D1Database, key: string): Promise<void> {
+  await db.prepare("DELETE FROM runtime_state WHERE key = ?").bind(key).run();
+}
+
+export async function isTaskDeleted(db: D1Database, taskId: string): Promise<boolean> {
+  if (!taskId) return false;
+  const row = await db
+    .prepare("SELECT value FROM runtime_state WHERE key = ?")
+    .bind(`deleted_task:${taskId}`)
+    .first<{ value: string }>();
+  return Boolean(row);
+}
+
+export async function markTaskDeleted(
+  db: D1Database,
+  taskId: string,
+  meta: { kind?: string; series_title?: string | null; status?: string | null } = {}
+): Promise<void> {
+  const value = JSON.stringify({
+    deleted_at: new Date().toISOString(),
+    kind: meta.kind || "render",
+    series_title: meta.series_title || null,
+    prior_status: meta.status || null,
+  });
+  await setRuntimeState(db, `deleted_task:${taskId}`, value);
+}
+
+export async function setTaskWorkflowRunId(db: D1Database, taskId: string, runId: string | number): Promise<void> {
+  const cleaned = String(runId || "").trim();
+  if (!taskId || !/^\d+$/.test(cleaned)) return;
+  await setRuntimeState(db, `task_run:${taskId}`, cleaned);
+}
+
+export async function getTaskWorkflowRunId(db: D1Database, taskId: string): Promise<string | null> {
+  if (!taskId) return null;
+  const row = await db
+    .prepare("SELECT value FROM runtime_state WHERE key = ?")
+    .bind(`task_run:${taskId}`)
+    .first<{ value: string }>();
+  return row?.value || null;
+}
+
 export async function appendTaskLogs(
   db: D1Database,
   taskId: string,

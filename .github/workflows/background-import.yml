@@ -1,4 +1,5 @@
 name: StoryForge Background Library Import
+run-name: "StoryForge Background Import [${{ github.event.inputs.task_id }}]"
 
 on:
   workflow_dispatch:

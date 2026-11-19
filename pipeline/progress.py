@@ -6,6 +6,7 @@ Reports batched logs and FFmpeg progress percentages to the Cloudflare Worker in
 from __future__ import annotations
 
 import json
+import os
 import sys
 import threading
 import time
@@ -37,6 +38,8 @@ class TaskReporter:
         self._last_flush = time.monotonic()
         self._progress_pct = 0.0
         self._current_stage = "queued"
+        self.deleted = False
+        self.github_run_id = os.environ.get("GITHUB_RUN_ID") or None
 
     def set_stage(
         self,
@@ -119,7 +122,7 @@ class TaskReporter:
             self.flush()
 
     def flush(self, status: str | None = None, error: str | None = None) -> None:
-        if not self.worker_url or not self.secret:
+        if self.deleted or not self.worker_url or not self.secret:
             with self._lock:
                 self._buffer.clear()
             return
@@ -136,6 +139,8 @@ class TaskReporter:
             "current_stage": stage,
             "logs": logs,
         }
+        if self.github_run_id:
+            payload["github_run_id"] = self.github_run_id
         if status is not None:
             payload["status"] = status
         if error is not None:
@@ -153,7 +158,13 @@ class TaskReporter:
                 },
             )
             with urllib.request.urlopen(req, timeout=20) as resp:
-                resp.read()
+                body = resp.read()
+                try:
+                    parsed = json.loads(body.decode("utf-8"))
+                    if parsed.get("deleted"):
+                        self.deleted = True
+                except Exception:
+                    pass
         except Exception as exc:
             print(f"[progress] warn: flush failed: {exc}", file=sys.stderr)
 

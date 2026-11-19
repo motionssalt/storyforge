@@ -1,10 +1,14 @@
 import {
   appendTaskLogs,
+  deleteRuntimeState,
   getRuntimeState,
   getSettings,
   getTaskFull,
+  getTaskWorkflowRunId,
+  isTaskDeleted,
   listZernioAccounts,
   listZernioKeys,
+  markTaskDeleted,
   setRuntimeState,
 } from "./db";
 import { buildPlatformTarget, ensurePartTitle, PartMeta } from "./platforms";
@@ -94,10 +98,17 @@ async function fetchGitHubRenderAssetStream(
   return { body: redir.body, sizeBytes: len };
 }
 
-async function deleteGitHubRenderAssetsForTask(env: Env, parts: TaskPartRow[]): Promise<string[]> {
+export async function deleteGitHubRenderAssetsForTask(
+  env: Env,
+  parts: Array<Pick<TaskPartRow, "asset_id" | "filename">>,
+  taskId?: string
+): Promise<string[]> {
   const repo = env.GITHUB_REPO || "motionssalt/storyforge";
   const deleted: string[] = [];
-  if (!parts.some((part) => part.asset_id || part.filename)) return deleted;
+  if (!env.GITHUB_TOKEN) return deleted;
+  const hasPrefix = Boolean(taskId && taskId.trim());
+  if (!hasPrefix && !parts.some((part) => part.asset_id || part.filename)) return deleted;
+
   const relRes = await fetch(`https://api.github.com/repos/${repo}/releases/tags/renders`, {
     headers: {
       Authorization: `Bearer ${env.GITHUB_TOKEN}`,
@@ -120,9 +131,15 @@ async function deleteGitHubRenderAssetsForTask(env: Env, parts: TaskPartRow[]): 
       targetNames.add(thumbName);
     }
   }
+  const prefix = hasPrefix ? `${taskId!.trim()}_` : "";
 
   for (const a of assets) {
-    if (targetIds.has(Number(a.id)) || targetNames.has(String(a.name))) {
+    const aName = String(a.name || "");
+    if (
+      targetIds.has(Number(a.id)) ||
+      targetNames.has(aName) ||
+      (prefix && aName.startsWith(prefix))
+    ) {
       const delRes = await fetch(`https://api.github.com/repos/${repo}/releases/assets/${a.id}`, {
         method: "DELETE",
         headers: {
@@ -132,9 +149,9 @@ async function deleteGitHubRenderAssetsForTask(env: Env, parts: TaskPartRow[]): 
         },
       });
       if (delRes.ok || delRes.status === 404) {
-        deleted.push(String(a.name));
+        deleted.push(aName);
       } else {
-        throw new Error(`Render asset deletion failed (${delRes.status}).`);
+        throw new Error(`Render asset deletion failed for ${aName} (${delRes.status}).`);
       }
     }
   }
@@ -166,6 +183,7 @@ export async function cleanupPublishedTask(env: Env, taskId: string): Promise<{ 
 
 export async function initializePublishingForTask(env: Env, taskId: string): Promise<void> {
   const db = env.STORYFORGE_DB;
+  if (await isTaskDeleted(db, taskId)) return;
   const full = await getTaskFull(db, taskId);
   if (!full) return;
   const { task, parts } = full;
@@ -336,10 +354,12 @@ async function pollInFlightTargets(
 
   const nowIso = new Date().toISOString();
   for (const [, rows] of batches) {
+    if (await isTaskDeleted(db, rows[0].task_id)) continue;
     const keyRow = keyMap.get(rows[0].key_id);
     if (!keyRow) continue;
     try {
       const resp = await adapter.getPost(keyRow.api_key, rows[0].zernio_post_id!);
+      if (await isTaskDeleted(db, rows[0].task_id)) continue;
       const byAcc = new Map<string, any>();
       for (const p of resp.post.platforms) {
         if (p.accountId) byAcc.set(p.accountId, p);
@@ -510,6 +530,7 @@ export async function processPublishingTick(env: Env): Promise<{ checked: number
 
   for (const [, batch] of dispatchBatches) {
     const first = batch[0];
+    if (await isTaskDeleted(db, first.task_id)) continue;
     const taskFull = await getTaskFull(db, first.task_id);
     if (!taskFull) continue;
     const part = taskFull.parts.find((p) => p.part_number === first.part_number);
@@ -720,6 +741,7 @@ export async function processPublishingTick(env: Env): Promise<{ checked: number
   let cleaned = 0;
 
   for (const row of activeTasks || []) {
+    if (await isTaskDeleted(db, row.task_id)) continue;
     checked++;
     const full = await getTaskFull(db, row.task_id);
     if (!full) continue;
@@ -801,6 +823,7 @@ export async function processPublishingTick(env: Env): Promise<{ checked: number
 
 export async function retryFailedTargetsForTask(env: Env, taskId: string): Promise<{ retried: number }> {
   const db = env.STORYFORGE_DB;
+  if (await isTaskDeleted(db, taskId)) throw new Error("Task was deleted");
   const full = await getTaskFull(db, taskId);
   if (!full) throw new Error("Task not found");
   const settings = await getSettings(db);
@@ -909,3 +932,299 @@ export async function retryFailedTargetsForTask(env: Env, taskId: string): Promi
   await processPublishingTick(env);
   return { retried };
 }
+
+export interface AlreadyLivePostInfo {
+  part_number: number;
+  platform: string;
+  account_name: string;
+  platform_post_url: string | null;
+  zernio_post_id: string | null;
+}
+
+export interface DeleteTaskResult {
+  ok: boolean;
+  deleted: boolean;
+  partial: boolean;
+  already_deleted: boolean;
+  task_id: string;
+  cancelled_runs: number[];
+  cancelled_zernio_posts: string[];
+  already_live_posts: AlreadyLivePostInfo[];
+  deleted_assets: string[];
+  failures: string[];
+}
+
+async function cancelGitHubWorkflowRunsForTask(
+  env: Env,
+  taskId: string,
+  kind: string,
+  storedRunId: string | null
+): Promise<number[]> {
+  const cancelled: number[] = [];
+  if (!env.GITHUB_TOKEN) return cancelled;
+  const repo = env.GITHUB_REPO || "motionssalt/storyforge";
+  const workflowFile = kind === "bg_import" ? "background-import.yml" : "render.yml";
+  const headers = {
+    Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+    Accept: "application/vnd.github+json",
+    "User-Agent": "StoryForge-Worker",
+  };
+
+  const runIds = new Set<number>();
+  if (storedRunId && /^\d+$/.test(storedRunId)) {
+    runIds.add(Number(storedRunId));
+  }
+
+  // Also scan recent workflow runs to catch queued/in-progress runs before runner reported GITHUB_RUN_ID
+  const listRes = await fetch(
+    `https://api.github.com/repos/${repo}/actions/workflows/${workflowFile}/runs?per_page=25`,
+    { headers }
+  );
+  if (listRes.ok) {
+    const data: any = await listRes.json().catch(() => ({}));
+    const runs: any[] = Array.isArray(data?.workflow_runs) ? data.workflow_runs : [];
+    for (const r of runs) {
+      const st = String(r?.status || "");
+      const title = String(r?.display_title || r?.name || "");
+      if (
+        ["queued", "in_progress", "waiting", "pending", "requested"].includes(st) &&
+        title.includes(taskId)
+      ) {
+        runIds.add(Number(r.id));
+      }
+    }
+  } else if (listRes.status !== 404) {
+    throw new Error(`GitHub workflow runs lookup failed (${listRes.status}).`);
+  }
+
+  for (const rid of runIds) {
+    const cancelRes = await fetch(
+      `https://api.github.com/repos/${repo}/actions/runs/${rid}/cancel`,
+      { method: "POST", headers }
+    );
+    if (cancelRes.ok || cancelRes.status === 202) {
+      cancelled.push(rid);
+    } else if (cancelRes.status === 409 || cancelRes.status === 404) {
+      // 409 = already completed/cancelled; 404 = not found -> idempotent success
+    } else {
+      throw new Error(`Failed to cancel GitHub workflow run #${rid} (${cancelRes.status}).`);
+    }
+  }
+  return cancelled;
+}
+
+export async function deleteTaskById(env: Env, taskId: string): Promise<DeleteTaskResult> {
+  const db = env.STORYFORGE_DB;
+  const full = await getTaskFull(db, taskId);
+  const alreadyTombstoned = await isTaskDeleted(db, taskId);
+
+  if (!full) {
+    if (!alreadyTombstoned) {
+      await markTaskDeleted(db, taskId);
+    }
+    try {
+      await env.STORYFORGE_VAULT.delete(`job:${taskId}`);
+    } catch {
+      /* ignore */
+    }
+    try {
+      await deleteRuntimeState(db, `task_run:${taskId}`);
+    } catch {
+      /* ignore */
+    }
+    return {
+      ok: true,
+      deleted: true,
+      partial: false,
+      already_deleted: true,
+      task_id: taskId,
+      cancelled_runs: [],
+      cancelled_zernio_posts: [],
+      already_live_posts: [],
+      deleted_assets: [],
+      failures: [],
+    };
+  }
+
+  const { task, parts, targets } = full;
+  const nowIso = new Date().toISOString();
+
+  // Write tombstone immediately so concurrent callbacks or cron ticks cannot resurrect or publish this task
+  await markTaskDeleted(db, taskId, {
+    kind: task.kind,
+    series_title: task.series_title,
+    status: task.status,
+  });
+  await db
+    .prepare("UPDATE tasks SET status = 'deleting', current_stage = 'deleting', updated_at = ? WHERE task_id = ?")
+    .bind(nowIso, taskId)
+    .run();
+
+  const cancelled_runs: number[] = [];
+  const cancelled_zernio_posts: string[] = [];
+  const already_live_posts: AlreadyLivePostInfo[] = [];
+  const deleted_assets: string[] = [];
+  const failures: string[] = [];
+
+  // 1. Cancel running/queued GitHub Actions workflow run(s)
+  const storedRunId = await getTaskWorkflowRunId(db, taskId);
+  const mayHaveActiveRun =
+    Boolean(storedRunId) ||
+    ["queued", "running", "deleting", "delete_failed"].includes(task.status);
+  if (mayHaveActiveRun && env.GITHUB_TOKEN) {
+    try {
+      const runs = await cancelGitHubWorkflowRunsForTask(env, taskId, task.kind, storedRunId);
+      cancelled_runs.push(...runs);
+    } catch (e: any) {
+      failures.push(`Workflow cancel: ${e?.message || e}`);
+    }
+  }
+
+  // 2. Record already-live posts and cancel not-yet-live Zernio posts
+  const liveKeys = new Set<string>();
+  const addLive = (t: PublishTargetRow) => {
+    const k = `${t.part_number}::${t.platform}::${t.account_id}`;
+    if (liveKeys.has(k)) return;
+    liveKeys.add(k);
+    already_live_posts.push({
+      part_number: t.part_number,
+      platform: t.platform,
+      account_name: t.account_name,
+      platform_post_url: t.platform_post_url || null,
+      zernio_post_id: t.zernio_post_id || null,
+    });
+  };
+
+  for (const t of targets) {
+    if (t.status === "published" && task.dry_run === 0) {
+      addLive(t);
+    }
+  }
+
+  const settings = await getSettings(db);
+  const useMock = settings.mock_mode || task.mock_mode === 1;
+  const adapter = getZernioAdapter(db, useMock);
+  const keys = await listZernioKeys(db);
+  const keyMap = new Map<string, ZernioKeyRow>(keys.map((k) => [k.id, k]));
+
+  // Group non-dry-run Zernio posts that have at least one not-yet-live target
+  const cancelPosts = new Map<string, { keyId: string; postId: string; rows: PublishTargetRow[] }>();
+  const allMockPostIds = new Set<string>();
+  for (const t of targets) {
+    if (!t.zernio_post_id || task.dry_run === 1) continue;
+    if (t.zernio_post_id.startsWith("mock_post_")) allMockPostIds.add(t.zernio_post_id);
+    if (["pending", "scheduled", "publishing", "uploading", "processing"].includes(t.status)) {
+      const gKey = `${t.key_id}::${t.zernio_post_id}`;
+      const existing = cancelPosts.get(gKey);
+      if (existing) existing.rows.push(t);
+      else cancelPosts.set(gKey, { keyId: t.key_id, postId: t.zernio_post_id, rows: [t] });
+    }
+  }
+
+  for (const { keyId, postId, rows } of cancelPosts.values()) {
+    const keyRow = keyMap.get(keyId);
+    if (!keyRow && !useMock) {
+      failures.push(`Zernio cancel (${postId}): API key not found`);
+      continue;
+    }
+    const res = await adapter.deletePost(keyRow?.api_key || "mock", postId);
+    if (res.ok && res.cancelled) {
+      cancelled_zernio_posts.push(postId);
+    } else if (res.ok && res.alreadyLive) {
+      for (const r of rows) addLive(r);
+    } else if (!res.ok) {
+      failures.push(`Zernio cancel (${postId}): ${res.error || "Unknown error"}`);
+    }
+  }
+
+  // 3. Delete all owned video & thumbnail files in the `renders` Release (NEVER touch `backgrounds`)
+  if (task.kind === "render" && env.GITHUB_TOKEN) {
+    try {
+      const removed = await deleteGitHubRenderAssetsForTask(env, parts, taskId);
+      deleted_assets.push(...removed);
+    } catch (e: any) {
+      failures.push(`Render asset cleanup: ${e?.message || e}`);
+    }
+  }
+
+  // 4. Clean up task-owned KV & runtime_state entries (never touch shared vault/settings/bg_index)
+  try {
+    await env.STORYFORGE_VAULT.delete(`job:${taskId}`);
+  } catch {
+    /* ignore */
+  }
+  for (const mpid of allMockPostIds) {
+    try {
+      await deleteRuntimeState(db, `mock_post:${mpid}`);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (failures.length > 0) {
+    await db
+      .prepare(
+        "UPDATE tasks SET status = 'delete_failed', current_stage = 'delete_failed', error = ?, updated_at = ? WHERE task_id = ?"
+      )
+      .bind(`Partial delete failure (tap Delete to retry): ${failures.join(" | ")}`.slice(0, 1000), new Date().toISOString(), taskId)
+      .run();
+    return {
+      ok: false,
+      deleted: false,
+      partial: true,
+      already_deleted: false,
+      task_id: taskId,
+      cancelled_runs,
+      cancelled_zernio_posts,
+      already_live_posts,
+      deleted_assets,
+      failures,
+    };
+  }
+
+  // 5. All external cleanup succeeded -> remove D1 rows and task_run pointer
+  await db.batch([
+    db.prepare("DELETE FROM task_logs WHERE task_id = ?").bind(taskId),
+    db.prepare("DELETE FROM publish_targets WHERE task_id = ?").bind(taskId),
+    db.prepare("DELETE FROM task_parts WHERE task_id = ?").bind(taskId),
+    db.prepare("DELETE FROM tasks WHERE task_id = ?").bind(taskId),
+    db.prepare("DELETE FROM runtime_state WHERE key = ?").bind(`task_run:${taskId}`),
+  ]);
+
+  // 6. Keep queue cadence clean when a queued task is deleted
+  if (task.kind === "render" && task.publish_mode === "queue") {
+    try {
+      const maxRow = await db
+        .prepare(
+          `SELECT MAX(scheduled_for_utc) AS max_slot
+           FROM tasks
+           WHERE kind = 'render'
+             AND publish_mode = 'queue'
+             AND status IN ('queued', 'running', 'queued_publish', 'scheduled', 'publishing', 'waiting_for_keys')
+             AND scheduled_for_utc IS NOT NULL`
+        )
+        .first<{ max_slot: string | null }>();
+      if (maxRow?.max_slot) {
+        await setRuntimeState(db, "last_queue_slot_utc", maxRow.max_slot);
+      } else {
+        await deleteRuntimeState(db, "last_queue_slot_utc");
+      }
+    } catch {
+      /* non-fatal */
+    }
+  }
+
+  return {
+    ok: true,
+    deleted: true,
+    partial: false,
+    already_deleted: false,
+    task_id: taskId,
+    cancelled_runs,
+    cancelled_zernio_posts,
+    already_live_posts,
+    deleted_assets,
+    failures: [],
+  };
+}
+

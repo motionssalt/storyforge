@@ -65,6 +65,10 @@ export interface ZernioAdapter {
   createPost(apiKey: string, payload: CreatePostInput, idempotencyKey: string): Promise<ZernioPostResponse>;
   getPost(apiKey: string, postId: string): Promise<ZernioPostResponse>;
   retryPost(apiKey: string, postId: string): Promise<ZernioPostResponse>;
+  deletePost(
+    apiKey: string,
+    postId: string
+  ): Promise<{ ok: boolean; cancelled: boolean; alreadyLive?: boolean; message?: string; error?: string }>;
 }
 
 const ZERNIO_BASE = "https://zernio.com/api/v1";
@@ -260,6 +264,48 @@ export class LiveZernioAdapter implements ZernioAdapter {
       error: data?.error,
     };
   }
+
+  async deletePost(
+    apiKey: string,
+    postId: string
+  ): Promise<{ ok: boolean; cancelled: boolean; alreadyLive?: boolean; message?: string; error?: string }> {
+    try {
+      const res = await fetch(`${ZERNIO_BASE}/posts/${encodeURIComponent(postId)}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          Accept: "application/json",
+        },
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (res.ok || res.status === 404) {
+        return {
+          ok: true,
+          cancelled: true,
+          message: data?.message || (res.status === 404 ? "Post already removed on Zernio" : "Post cancelled on Zernio"),
+        };
+      }
+      if (res.status === 400 || res.status === 409) {
+        return {
+          ok: true,
+          cancelled: false,
+          alreadyLive: true,
+          message: data?.error || data?.message || `Post could not be cancelled (HTTP ${res.status})`,
+        };
+      }
+      return {
+        ok: false,
+        cancelled: false,
+        error: `Zernio deletePost failed (${res.status}): ${data?.error || data?.message || "Unknown error"}`,
+      };
+    } catch (e: any) {
+      return {
+        ok: false,
+        cancelled: false,
+        error: e?.message || "Network error cancelling Zernio post",
+      };
+    }
+  }
 }
 
 export class MockZernioAdapter implements ZernioAdapter {
@@ -411,6 +457,26 @@ export class MockZernioAdapter implements ZernioAdapter {
     stored.publishedAt = nowIso;
     await setRuntimeState(this.db, `mock_post:${postId}`, JSON.stringify(stored));
     return { httpStatus: 200, post: stored, message: "Mock retry succeeded" };
+  }
+
+  async deletePost(
+    _apiKey: string,
+    postId: string
+  ): Promise<{ ok: boolean; cancelled: boolean; alreadyLive?: boolean; message?: string; error?: string }> {
+    const raw = await getRuntimeState(this.db, undefined, `mock_post:${postId}`, "");
+    if (!raw) {
+      return { ok: true, cancelled: true, message: "Mock post already removed" };
+    }
+    const stored = JSON.parse(raw);
+    if (stored.status === "published") {
+      return { ok: true, cancelled: false, alreadyLive: true, message: "Mock post already live" };
+    }
+    stored.status = "cancelled";
+    for (const p of stored.platforms || []) {
+      if (p.status !== "published") p.status = "cancelled";
+    }
+    await setRuntimeState(this.db, `mock_post:${postId}`, JSON.stringify(stored));
+    return { ok: true, cancelled: true, message: "Mock post cancelled" };
   }
 }
 
