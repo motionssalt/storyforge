@@ -1,7 +1,7 @@
 {
   "project": "storyforge",
-  "phase": "Phase 1: Working End-to-End",
-  "updated_at": "2026-11-19T06:32:13.220994+00:00",
+  "phase": "Round 1 Complete (SF-003, SF-001, SF-002)",
+  "updated_at": "2026-11-19T08:48:00+00:00",
   "phases": {
     "1_vault_migration_and_repo_sanitization": "done",
     "2_schema_and_agent_prompt": "done",
@@ -9,7 +9,10 @@
     "4_cloudflare_site_and_worker": "done_deployed_verified",
     "5_voice_samples_calibration": "done_16_voices_32_playable_samples",
     "6_background_footage_library": "done_3_user_supplied_clips_uploaded",
-    "7_e2e_sample_render_and_eye_check": "done"
+    "7_e2e_sample_render_and_eye_check": "done",
+    "8_round1_sf003_scrolling_post_and_v2_schema": "done_verified",
+    "9_round1_sf001_copy_safe_agent_prompt_and_repair": "done_verified",
+    "10_round1_sf002_seeded_avatars_and_load_guard": "done_verified"
   },
   "decisions": [
     "Stored private research vault (skill/, analysis/, data/, old BUILD_STATE.json, AGENT_PROMPT) in Cloudflare Workers KV namespace 'storyforge-vault' (contact sheets chunked into <= 4.5 MB zips under KV's 25 MiB per-value limit).",
@@ -29,10 +32,14 @@
     "Populated backgrounds GitHub Release with the 3 user-supplied gameplay clips (bg_01_parkour_minimal.mp4, bg_02_snowboard_steep.mp4, bg_03_minecraft_parkour.mp4), audio-stripped at 1080p with manifest.json.",
     "Updated .github/workflows/render.yml to install static ffmpeg/ffprobe from FFmpeg-Builds GitHub Release when missing, avoiding slow Ubuntu apt mirror timeouts.",
     "Fixed missing User-Agent header on internal background-index call in pipeline/run_job.py so Cloudflare WAF permits sequential index lookup during production renders.",
-    "Generated a fresh memorable site passphrase for AUTH_PASSWORD in Cloudflare Pages secrets and verified live login + production two-part render + protected downloads."
+    "Generated a fresh memorable site passphrase for AUTH_PASSWORD in Cloudflare Pages secrets and verified live login + production two-part render + protected downloads.",
+    "SF-003: Replaced v1 per-part cards timeline with schema_version 2 single post object per part; preserved legacy comment/reply/branded code in render_cards.py and added tolerant v1->v2 migration with notices in web and pipeline.",
+    "SF-003: Implemented single-pass tall-body Chromium rendering (card_shell.png + body_dim.png + body_bright.png) paired with Pillow bilinear affine scrolling synced monotonically to Whisper/Edge word timestamps via compute_scroll_curve and piped as raw rgb24 overlay frames into FFmpeg.",
+    "SF-001: Rewrote vault:agent_prompt in KV to request a single fenced ```json code block with nothing before/after, plain-words field guide plus one concrete v2 example (The Numbered Parcel Slip), zero formal JSON Schema, and anti-escape rules; added client + Worker deterministic repair (fence strip, outer brace trim, markdown backslash unescaping) and schema-echo error detection.",
+    "SF-002: Seeded DiceBear v9 avataaars PNG resolution by canonicalized username (cached per job in avatars_cache/) with non-emoji bundled fallback and img.complete/naturalWidth/img.decode() readiness guard so avatars look like cartoon characters and stay identical across every part of a series."
   ],
   "blockers": [],
-  "next_action": "Phase 1 complete. Optional future work (not started): add more background clips to the backgrounds release if desired, Phase 2 emotional TTS engine (VoiceStudio), Android app, and UI polish.",
+  "next_action": "Round 1 complete and verified. Next: user review of rendered v2 videos and prompt output.",
   "verification": {
     "vault": {
       "values_verified": 35,
@@ -41,7 +48,6 @@
     },
     "repository": {
       "public": true,
-      "reachable_commits": 5,
       "branches": [
         "main"
       ],
@@ -50,52 +56,45 @@
       "private_paths_in_current_tree": false
     },
     "site": "https://storyforge-sfb.pages.dev",
-    "last_failed_render_run": 44445166835,
-    "background_download_failure_run": 44444440622,
-    "production_deployment": "https://11083624.storyforge-sfb.pages.dev",
-    "successful_render_run": 44466718014,
-    "successful_render_job": "sf_verify_7a11a6abb9",
+    "production_deployment": "https://120c000a.storyforge-sfb.pages.dev",
     "render_assets": "https://github.com/motionssalt/storyforge/releases/tag/renders",
     "public_evidence": "docs/verification.json",
-    "mobile_browser": "390px viewport; login, prompt generation, validation, 16 voice options, audio playback, WPM-derived rate, actionable missing-library error, logout, no JS errors, no horizontal overflow.",
-    "samples": "All 32 MP3 files decoded with ffprobe; live William voice identifier corrected.",
-    "download_proxy": "Both complete sample MP4s verified byte-for-byte against Actions artifacts; anonymous requests receive 401.",
-    "private_prompt": "Existing research-derived private prompt retained; added exact authoritative schema and explicit timing/part rules in KV, then byte-verified; no private method in git.",
-    "backgrounds_release": {
-      "tag": "backgrounds",
-      "clips": [
-        "bg_01_parkour_minimal.mp4",
-        "bg_02_snowboard_steep.mp4",
-        "bg_03_minecraft_parkour.mp4"
-      ],
-      "manifest_uploaded": true
+    "round1_field2_and_prompt": {
+      "kv_prompt_bytes": 8044,
+      "schema_keywords_present": false,
+      "example_in_prompt_ajv_valid": true,
+      "tested_cases": [
+        "Case A: clean fenced v2 reply from prompt example -> repaired fence + valid v2",
+        "Case B: messy prose before/after fence with \\[, \\], \\_ escapes -> stripped prose/fence + unescaped + valid v2",
+        "Case C: legacy v1 cards timeline -> migrated to schema_version 2 post + surfaced migration notice",
+        "Case D: echoed $schema/$defs object -> rejected with clear schema-echo explanation"
+      ]
     },
-    "production_e2e_render": {
-      "job_id": "sf_mwn5yact_5b38c0",
-      "workflow_run_id": 44471719812,
-      "workflow_url": "https://github.com/motionssalt/storyforge/actions/runs/44471719812",
+    "round1_two_part_render": {
+      "job_id": "sf_mwnaukjf_4aa161",
+      "workflow_run_id": 44489510070,
+      "workflow_url": "https://github.com/motionssalt/storyforge/actions/runs/44489510070",
       "input_example": "schema/examples/two-part-series.json",
       "part1": {
-        "filename": "sf_mwn5yact_5b38c0_part1.mp4",
+        "filename": "sf_mwnaukjf_4aa161_part1.mp4",
+        "asset_id": 766913849,
         "duration_sec": 80.7,
-        "bytes": 34425041,
+        "bytes": 26517682,
         "background_clip": "bg_01_parkour_minimal.mp4"
       },
       "part2": {
-        "filename": "sf_mwn5yact_5b38c0_part2.mp4",
+        "filename": "sf_mwnaukjf_4aa161_part2.mp4",
+        "asset_id": 766913930,
         "duration_sec": 77.93,
-        "bytes": 47932552,
+        "bytes": 36132999,
         "background_clip": "bg_02_snowboard_steep.mp4"
       },
-      "next_background_index_after_job": 2,
-      "anonymous_download_status": 401,
-      "eye_check": "Inspected 1080x1920 frames at 1.2s, 18.0s, 34.0s, 60.0s for both parts: distinct real gameplay backgrounds, crisp dark branded/comment/reply Reddit cards above subtitle safe zone, bold comic Lilita One subtitles with black outline and active yellow word highlight."
+      "eye_check": "Inspected 1080x1920 frames at 1.5s, 25.0s, 48.0s, and near-end (76.5s / 73.5s) for both parts: persistent dark Reddit post card stays above ASS subtitles with no overlap, [pause]/[laugh] markers stripped from body text, smooth scrolling with active sentence box tracks spoken subtitles accurately, zero comment/reply pop-ups, and identical DiceBear avataaars cartoon portrait for u/watchmaker_nephew across all frames and both parts."
     }
   },
   "not_fully_verified": [
-    "Real-gameplay end-to-end sample and across-job clip rotation.",
-    "Long-form narration actual 250 WPM (calibrated default is an estimate; short smoke includes natural pauses).",
-    "Edge service remains an external dependency and may still reject requests after retry exhaustion.",
-    "KV has eventual consistency; workflow concurrency serializes runs, but near-simultaneous clients or more than one pending Actions run need stronger queue/transactional allocation before multi-user use."
+    "Light card theme (theme: 'light') was checked in scrolling CSS and card background fill code; full Actions MP4 render used two-part-series.json (dark theme in both parts).",
+    "Live authenticated browser round-trip against https://storyforge-sfb.pages.dev with user AUTH_PASSWORD was not run because existing secret plaintext is not readable; /api/validate and repair logic were executed directly against the bundled Worker handler and extracted client repairPastedJson.",
+    "Edge service remains an external dependency and may still reject requests after retry exhaustion."
   ]
 }

@@ -1,6 +1,6 @@
 {
-  "verified_at": "2026-11-19T06:32:13.220994+00:00",
-  "scope": "Phase 1 full end-to-end verification with real user-supplied gameplay backgrounds.",
+  "verified_at": "2026-11-19T08:48:00+00:00",
+  "scope": "Round 1 fixes (SF-003, SF-001, SF-002) verified end-to-end with real gameplay backgrounds.",
   "vault": {
     "manifest_values": 35,
     "verified_bytes": 99023615,
@@ -115,5 +115,34 @@
     "next_background_index_after_job": 2,
     "anonymous_download_status": 401,
     "eye_check": "Inspected 1080x1920 frames at 1.2s, 18.0s, 34.0s, 60.0s for both parts: distinct real gameplay backgrounds, crisp dark branded/comment/reply Reddit cards above subtitle safe zone, bold comic Lilita One subtitles with black outline and active yellow word highlight."
+  },
+  "round1_field2_tests": {
+    "kv_prompt_bytes": 8044,
+    "example_in_prompt_valid": true,
+    "clean_fenced_v2_valid": true,
+    "messy_escaped_reply_repaired": true,
+    "legacy_v1_migrated_with_notice": true,
+    "echoed_schema_rejected_explicitly": true
+  },
+  "round1_two_part_render": {
+    "job_id": "sf_mwnaukjf_4aa161",
+    "workflow_run_id": 44489510070,
+    "workflow_url": "https://github.com/motionssalt/storyforge/actions/runs/44489510070",
+    "input_example": "schema/examples/two-part-series.json",
+    "part1": {
+      "filename": "sf_mwnaukjf_4aa161_part1.mp4",
+      "asset_id": 766913849,
+      "duration_sec": 80.7,
+      "bytes": 26517682,
+      "background_clip": "bg_01_parkour_minimal.mp4"
+    },
+    "part2": {
+      "filename": "sf_mwnaukjf_4aa161_part2.mp4",
+      "asset_id": 766913930,
+      "duration_sec": 77.93,
+      "bytes": 36132999,
+      "background_clip": "bg_02_snowboard_steep.mp4"
+    },
+    "eye_check": "Inspected 1080x1920 frames at 1.5s, 25.0s, 48.0s, and near-end (76.5s / 73.5s) for both parts: persistent dark Reddit post card stays on screen above ASS subtitles with no overlap, [pause]/[laugh] markers stripped, scrolling highlights match spoken words, zero comment/reply pop-ups, and identical DiceBear avataaars cartoon portrait for u/watchmaker_nephew across all frames and both parts."
   }
 }
