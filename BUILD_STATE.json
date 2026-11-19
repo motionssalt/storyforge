@@ -1,23 +1,52 @@
 {
   "project": "storyforge",
   "phase": "Phase 1: Working End-to-End",
-  "updated_at": "2026-11-19T02:20:00Z",
+  "updated_at": "2026-11-19T05:34:04.285055+00:00",
   "phases": {
-    "1_vault_migration_and_repo_sanitization": "in_progress",
-    "2_schema_and_agent_prompt": "done",
-    "3_pipeline_and_assets": "done",
-    "4_cloudflare_site_and_worker": "in_progress",
-    "5_voice_samples_calibration": "pending",
-    "6_background_footage_library": "pending",
-    "7_e2e_sample_render_and_eye_check": "pending"
+    "1_vault_migration_and_repo_sanitization": "verified_existing",
+    "2_schema_and_agent_prompt": "done_pending_strict_validation_fix",
+    "3_pipeline_and_assets": "in_progress_retry_hardening",
+    "4_cloudflare_site_and_worker": "deployed_pending_audit_fixes",
+    "5_voice_samples_calibration": "verified_existing_16_voices_32_samples",
+    "6_background_footage_library": "blocked_youtube_bot_detection",
+    "7_e2e_sample_render_and_eye_check": "in_progress"
   },
   "decisions": [
     "Stored private research vault (skill/, analysis/, data/, old BUILD_STATE.json, AGENT_PROMPT) in Cloudflare Workers KV namespace 'storyforge-vault' (contact sheets chunked into <= 4.5 MB zips under KV's 25 MiB per-value limit).",
     "Built web frontend + backend API as Cloudflare Pages + Pages Functions in web/ (single origin, no CORS issues, KV binding + Worker secrets).",
     "Bundled 60 DiceBear SVG avatars in assets/avatars/ and OFL fonts LilitaOne-Regular.ttf + Bangers-Regular.ttf in assets/fonts/ so rendering requires zero external font/avatar network calls.",
     "Implemented swappable TTSEngine protocol in pipeline/tts_engine.py with EdgeTTSEngine (Edge WordBoundary with automatic faster-whisper base.en fallback) and VoiceStudioCoupledSpeedupHook reserved for Phase 2.",
-    "Security residual risk note: After orphan-branch history rewrite and deleting old branches, tags, and v1 release, old commit SHAs from prior history may remain reachable by exact SHA on GitHub until GitHub runs repository garbage collection."
+    "Security residual risk note: After orphan-branch history rewrite and deleting old branches, tags, and v1 release, old commit SHAs from prior history may remain reachable by exact SHA on GitHub until GitHub runs repository garbage collection.",
+    "Resumed actual existing repository and deployed Pages site, rather than overwriting previous implementation or rewriting already-clean history again.",
+    "Cloudflare credential is an account-level token; account token verification succeeds (user-token verify endpoint is inapplicable).",
+    "Background downloads have already hit the specified stop condition; preserve the exact blocker and use clearly labelled procedural footage ONLY for technical smoke verification, never claim it is gameplay."
   ],
-  "blockers": [],
-  "next_action": "Verify vault:manifest.json in storyforge-vault KV, push orphan main branch to motionssalt/storyforge, delete v1 tag/release, make repo public, set secrets, run workflows."
+  "blockers": [
+    {
+      "phase": "background_library",
+      "reason": "YouTube bot detection on GitHub Actions; multiple yt-dlp clients already tried. No further retries or unapproved footage sources.",
+      "required_action": "Upload legally reusable YouTube gameplay MP4s plus manifest.json to backgrounds release; candidates and uploader helper are in docs/backgrounds-to-upload.json and pipeline/upload_local_backgrounds.py."
+    }
+  ],
+  "next_action": "Harden transient Edge TTS failures, use strict schema validation, verify site authentication and samples, run a short two-part technical smoke render, and inspect actual frames. Gameplay render remains blocked pending authorized footage upload.",
+  "verification": {
+    "vault": {
+      "values_verified": 35,
+      "bytes_verified": 99023615,
+      "method": "Downloaded every manifest-listed value and compared exact byte length and SHA-256; all 35 matched."
+    },
+    "repository": {
+      "public": true,
+      "reachable_commits": 5,
+      "branches": [
+        "main"
+      ],
+      "tags": [],
+      "releases": [],
+      "private_paths_in_current_tree": false
+    },
+    "site": "https://storyforge-sfb.pages.dev",
+    "last_failed_render_run": 44445166835,
+    "background_download_failure_run": 44444440622
+  }
 }
