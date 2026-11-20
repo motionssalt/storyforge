@@ -3,12 +3,47 @@
 
   const navBar = document.getElementById("navBar");
   const tabCreateBtn = document.getElementById("tabCreateBtn");
+  const tabVoicesBtn = document.getElementById("tabVoicesBtn");
   const tabSettingsBtn = document.getElementById("tabSettingsBtn");
   const logoutBtn = document.getElementById("logoutBtn");
 
   const loginView = document.getElementById("loginView");
   const createView = document.getElementById("createView");
+  const voicesView = document.getElementById("voicesView");
   const settingsView = document.getElementById("settingsView");
+  const createVoiceEngine = document.getElementById("createVoiceEngine");
+  const voicesEngineSelect = document.getElementById("voicesEngineSelect");
+  const voicesFilter = document.getElementById("voicesFilter");
+  const voicesLibraryList = document.getElementById("voicesLibraryList");
+  const voicesPlayAudio = document.getElementById("voicesPlayAudio");
+  const voicesPlayStatus = document.getElementById("voicesPlayStatus");
+  const voicesSampleText = document.getElementById("voicesSampleText");
+  const saveSampleTextBtn = document.getElementById("saveSampleTextBtn");
+  const voicesSampleStatus = document.getElementById("voicesSampleStatus");
+  const cvName = document.getElementById("cvName");
+  const cvDescriptor = document.getElementById("cvDescriptor");
+  const cvInstruct = document.getElementById("cvInstruct");
+  const cvSeed = document.getElementById("cvSeed");
+  const cvRandomSeedBtn = document.getElementById("cvRandomSeedBtn");
+  const cvGenerateBtn = document.getElementById("cvGenerateBtn");
+  const cvPlayBtn = document.getElementById("cvPlayBtn");
+  const cvSaveBtn = document.getElementById("cvSaveBtn");
+  const cvStatus = document.getElementById("cvStatus");
+  const cvPreviewAudio = document.getElementById("cvPreviewAudio");
+  const cvErr = document.getElementById("cvErr");
+  const mvName = document.getElementById("mvName");
+  const mvDescriptor = document.getElementById("mvDescriptor");
+  const mvBaseFile = document.getElementById("mvBaseFile");
+  const mvBaseText = document.getElementById("mvBaseText");
+  const mvEmotionInputs = document.getElementById("mvEmotionInputs");
+  const mvSaveBtn = document.getElementById("mvSaveBtn");
+  const mvStatus = document.getElementById("mvStatus");
+  const mvErr = document.getElementById("mvErr");
+  const mvList = document.getElementById("mvList");
+  const mvAudio = document.getElementById("mvAudio");
+  const mvPlayStatus = document.getElementById("mvPlayStatus");
+  const voiceTasksWrap = document.getElementById("voiceTasksWrap");
+  const setSampleText = document.getElementById("setSampleText");
 
   const loginForm = document.getElementById("loginForm");
   const pwInput = document.getElementById("pwInput");
@@ -104,17 +139,19 @@
   const bgLibraryGrid = document.getElementById("bgLibraryGrid");
 
   let activeTab = "create";
-  let voices = [], allVoices = [], hasVoiceStudioSamples = false;
+  let voices = [], allVoices = [], customDesignedVoices = [], myClonedVoices = [], hasVoiceStudioSamples = false;
+  const CLONE_EMOTION_SLOTS = ["calm", "tense", "angry", "shocked", "sad", "sarcastic", "excited"];
   const setVoiceEngine = document.getElementById('setVoiceEngine');
   const setVoiceSpeedup = document.getElementById('setVoiceSpeedup');
   const engineStatus = document.getElementById('voiceEngineStatus');
-  const voiceStudioPresetOptions = [
-    {id:'vs-harper',name:'Harper',descriptor:'Female · American · lower register'},
-    {id:'vs-rowan',name:'Rowan',descriptor:'Male · British · lower register'},
-    {id:'vs-morgan',name:'Morgan',descriptor:'Female · British · mid register'},
-  ].map(v => ({...v,engine:'voicestudio'}));
+  let draftDesignTaskId = null;
+  let draftPreviewKey = "";
+  const watchedVoiceTasks = new Set();
   let bgClips = [];
   let settings = {
+    voice_engine: "voicestudio",
+    voicestudio_voice_id: "vs-harper",
+    voicestudio_speedup: 1.25,
     default_voice_id: "en-US-AndrewMultilingualNeural",
     default_background: "sequential",
     queue_cadence_count: 3,
@@ -122,6 +159,7 @@
     part2_delay_minutes: 20,
     dry_run: false,
     mock_mode: false,
+    sample_text: "",
   };
   let zernioKeys = [];
   let zernioAccounts = [];
@@ -212,16 +250,26 @@
     stopNarration();
     closeBackgroundPreview();
     createView.classList.toggle("hidden", tab !== "create");
+    voicesView.classList.toggle("hidden", tab !== "voices");
     settingsView.classList.toggle("hidden", tab !== "settings");
     tabCreateBtn.className = tab === "create" ? "active-tab" : "secondary";
+    tabVoicesBtn.className = tab === "voices" ? "active-tab" : "secondary";
     tabSettingsBtn.className = tab === "settings" ? "active-tab" : "secondary";
-    if (tab === "settings") {
+    if (tab === "create") {
+      applyDefaultsToCreateScreen();
+    } else if (tab === "voices") {
+      voicesEngineSelect.value = settings.voice_engine || "voicestudio";
+      renderVoicesLibrary();
+      renderMyVoicesList();
+    } else if (tab === "settings") {
       loadZernioKeysAndAccounts();
       loadBackgrounds();
+      populateSettingsVoices();
     }
   }
 
   tabCreateBtn.addEventListener("click", () => switchTab("create"));
+  tabVoicesBtn.addEventListener("click", () => switchTab("voices"));
   tabSettingsBtn.addEventListener("click", () => switchTab("settings"));
 
   function updateCalibratedRate() {
@@ -250,6 +298,7 @@
       if (editingBackground) closeBackgroundEditor();
       loginView.classList.remove("hidden");
       createView.classList.add("hidden");
+      voicesView.classList.add("hidden");
       settingsView.classList.add("hidden");
       navBar.classList.add("hidden");
     }
@@ -277,7 +326,7 @@
     await checkAuth();
   });
 
-  // --- Voices ---
+  // --- Voices & Settings ---
   let activePlayKey = null;
 
   const players = Array.from(document.querySelectorAll("[data-narration]")).map((wrap) => {
@@ -301,14 +350,92 @@
     return { scope, select, listEl, audio, status };
   });
 
+  [
+    { audio: voicesPlayAudio, status: voicesPlayStatus },
+    { audio: cvPreviewAudio, status: cvStatus },
+    { audio: mvAudio, status: mvPlayStatus },
+  ].forEach(({ audio, status }) => {
+    audio.addEventListener("ended", () => {
+      activePlayKey = null;
+      updatePlayButtons();
+    });
+    audio.addEventListener("error", () => {
+      if (audio.hasAttribute("src")) {
+        activePlayKey = null;
+        updatePlayButtons();
+        status.textContent = "Couldn't load this audio preview.";
+      }
+    });
+  });
+
   function updatePlayButtons() {
     for (const p of players) {
       p.listEl.querySelectorAll("[data-play-voice]").forEach((btn) => {
-        const key = `${p.scope}:${btn.dataset.playVoice}:${btn.dataset.sample}`;
+        const slot = btn.dataset.slot || "base";
+        const key = `${p.scope}:${btn.dataset.playVoice}:${slot}`;
         const defaultLabel = btn.dataset.defaultLabel || "Play";
         btn.textContent = activePlayKey === key ? "Stop" : defaultLabel;
       });
     }
+    [voicesLibraryList, mvList].forEach((container) => {
+      if (!container) return;
+      container.querySelectorAll("[data-play-voice]").forEach((btn) => {
+        const slot = btn.dataset.slot || "base";
+        const scope = btn.dataset.playScope || "voices";
+        const key = `${scope}:${btn.dataset.playVoice}:${slot}`;
+        const defaultLabel = btn.dataset.defaultLabel || "Play";
+        btn.textContent = activePlayKey === key ? "Stop" : defaultLabel;
+      });
+    });
+    if (cvPlayBtn) {
+      cvPlayBtn.textContent = activePlayKey === "cv:draft:base" ? "Stop preview" : "Play preview";
+    }
+  }
+
+  function buildVoiceRowButtons(v, scope) {
+    const btns = [];
+    if (v.sample_normal) {
+      btns.push(`<button class="secondary" type="button" data-play-voice="${escapeHtml(v.id)}" data-play-scope="${scope}" data-slot="base" data-default-label="Play">Play</button>`);
+    } else {
+      btns.push(`<span class="muted">${v.kind === "cloned" ? "Preview not prepared yet" : "Sample not published yet"}</span>`);
+    }
+    if (v.emotion_previews) {
+      for (const emo of CLONE_EMOTION_SLOTS) {
+        if (v.emotion_previews[emo]) {
+          btns.push(`<button class="secondary" type="button" data-play-voice="${escapeHtml(v.id)}" data-play-scope="${scope}" data-slot="${emo}" data-default-label="Play ${emo}">Play ${emo}</button>`);
+        }
+      }
+    }
+    return btns.join(" ");
+  }
+
+  function wireAudioPlay(button, audioEl, statusEl, scope) {
+    const vid = button.dataset.playVoice;
+    const slot = button.dataset.slot || "base";
+    const key = `${scope}:${vid}:${slot}`;
+    if (activePlayKey === key) {
+      stopNarration();
+      return;
+    }
+    const voice = allVoices.find((v) => v.id === vid);
+    if (!voice) return;
+    stopNarration();
+    closeBackgroundPreview();
+    const src = slot === "base" ? voice.sample_normal : voice.emotion_previews?.[slot];
+    if (!src) {
+      statusEl.textContent = "This sample is not available yet.";
+      return;
+    }
+    activePlayKey = key;
+    updatePlayButtons();
+    audioEl.src = src;
+    statusEl.textContent = slot === "base" ? `${voice.name} · Preview` : `${voice.name} · ${slot} reference`;
+    audioEl.classList.remove("hidden");
+    audioEl.play().catch((err) => {
+      if (err.name !== "AbortError" && audioEl.getAttribute("src") === src && !audioEl.error) {
+        statusEl.textContent = "Use the audio player's play button to start the sample.";
+      }
+    });
   }
 
   function renderVoiceList(select, list) {
@@ -316,25 +443,25 @@
     if (!player) return;
     const radioName = `voice_pick_${player.scope}`;
     const currentId = select.value;
+    if (!list.length) {
+      player.listEl.innerHTML = '<div class="muted">No voices loaded for this engine.</div>';
+      return;
+    }
     player.listEl.innerHTML = list.map((v) => {
       const checked = v.id === currentId;
-      const emoLabel = v.engine === "voicestudio" ? "Play whisper" : "Play dramatic";
-      const emoBtn = v.sample_emotional
-        ? `<button class="secondary" type="button" data-play-voice="${escapeHtml(v.id)}" data-sample="emotional" data-default-label="${emoLabel}">${emoLabel}</button>`
-        : "";
+      const myBadge = v.is_my_voice ? ' <span class="badge ok">My voice</span>' : (v.kind === "designed" ? ' <span class="badge">Custom</span>' : "");
       return `
         <div class="voice-row${checked ? " selected" : ""}" data-voice-row="${escapeHtml(v.id)}">
           <label class="voice-pick">
             <input type="radio" name="${radioName}" value="${escapeHtml(v.id)}"${checked ? " checked" : ""} />
             <span>
-              <strong>${escapeHtml(v.name)}</strong>
-              ${checked ? '<span class="badge">Selected</span>' : ""}
+              <strong>${escapeHtml(v.name)}</strong>${myBadge}
+              ${checked ? ' <span class="badge">Selected</span>' : ""}
               <span class="muted" style="display:block;">${escapeHtml(v.descriptor || v.gender || "")}</span>
             </span>
           </label>
           <div class="row" style="margin-top:0;">
-            <button class="secondary" type="button" data-play-voice="${escapeHtml(v.id)}" data-sample="neutral" data-default-label="Play">Play</button>
-            ${emoBtn}
+            ${buildVoiceRowButtons(v, player.scope)}
           </div>
         </div>
       `;
@@ -351,70 +478,477 @@
     });
 
     player.listEl.querySelectorAll("[data-play-voice]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const vid = button.dataset.playVoice;
-        const kind = button.dataset.sample;
-        const key = `${player.scope}:${vid}:${kind}`;
-        if (activePlayKey === key) {
-          stopNarration();
-          return;
-        }
-        const voice = allVoices.find((v) => v.id === vid);
-        if (!voice) return;
-        stopNarration();
-        closeBackgroundPreview();
-        const src = voice["sample_" + kind];
-        if (!src) {
-          player.status.textContent = "This sample has not been published yet.";
-          return;
-        }
-        activePlayKey = key;
-        updatePlayButtons();
-        player.audio.src = src;
-        const kindLabel = kind === "neutral" ? "Sample" : (voice.engine === "voicestudio" ? "Whisper sample" : "Dramatic sample");
-        player.status.textContent = `${voice.name} · ${kindLabel}`;
-        player.audio.classList.remove("hidden");
-        player.audio.play().catch((err) => {
-          if (err.name !== "AbortError" && player.audio.getAttribute("src") === src && !player.audio.error) {
-            player.status.textContent = "Use the audio player's play button to start the sample.";
-          }
-        });
-      });
+      button.addEventListener("click", () => wireAudioPlay(button, player.audio, player.status, player.scope));
     });
     updatePlayButtons();
   }
 
   function populateVoiceOptions(select, engine) {
-    const list = allVoices.filter(v => v.engine === engine);
-    select.innerHTML = list.map(v => '<option value="' + escapeHtml(v.id) + '">' + escapeHtml(v.name) + ' (' + escapeHtml(v.descriptor || v.gender) + ')</option>').join('');
+    const list = allVoices.filter((v) => v.engine === engine);
+    select.innerHTML = list.map((v) => `<option value="${escapeHtml(v.id)}">${escapeHtml(v.name)} (${escapeHtml(v.descriptor || v.gender || "")})</option>`).join("");
     renderVoiceList(select, list);
     return list;
   }
 
   async function loadVoices() {
-    const cfg = await (await fetch('/voices.json')).json();
-    const response = await fetch('/api/voice-samples/voices.json').catch(() => null);
-    const release = response?.ok ? (await response.json().catch(() => ({}))).voices || [] : [];
-    const proxy = filename => filename ? '/api/voice-samples/' + encodeURIComponent(filename) : undefined;
-    hasVoiceStudioSamples = release.some(v => v.engine === 'voicestudio');
-    allVoices = (cfg.voices || []).map(v => {
-      const r = release.find(x => x.engine === 'edge' && x.id === v.id);
-      return {...v, engine:'edge', descriptor: r?.descriptor || [v.gender,v.accent].filter(Boolean).join(' · '), sample_neutral: proxy(r?.sample_file) || v.sample_neutral, sample_emotional: proxy(r?.emotional_sample_file) || v.sample_emotional};
-    }).concat(voiceStudioPresetOptions.map(v => {
-      const r = release.find(x => x.engine === v.engine && x.id === v.id);
-      return {...v, sample_neutral: proxy(r?.sample_file), sample_emotional: proxy(r?.emotional_sample_file)};
+    const [cfgRes, relRes, apiRes] = await Promise.all([
+      fetch("/voices.json").catch(() => null),
+      fetch("/api/voice-samples/voices.json").catch(() => null),
+      api("/api/voices"),
+    ]);
+    const cfg = cfgRes?.ok ? await cfgRes.json().catch(() => ({})) : {};
+    const release = relRes?.ok ? (await relRes.json().catch(() => ({}))).voices || [] : [];
+    const apiData = apiRes.ok ? apiRes.data : {};
+    const proxy = (filename) => (filename ? `/api/voice-samples/${encodeURIComponent(filename)}` : undefined);
+
+    hasVoiceStudioSamples = release.some((v) => v.engine === "voicestudio");
+    const edgeList = (apiData.edge || cfg.voices || []).map((v) => {
+      const r = release.find((x) => x.engine === "edge" && x.id === v.id);
+      return {
+        ...v,
+        engine: "edge",
+        kind: "builtin",
+        descriptor: r?.descriptor || [v.gender, v.accent].filter(Boolean).join(" · "),
+        sample_normal: proxy(r?.sample_file || r?.file),
+      };
+    });
+
+    const vsBuiltinRaw = apiData.voicestudio_builtin || cfg.voicestudio_voices || [];
+    const vsBuiltinList = vsBuiltinRaw.map((v) => {
+      const r = release.find((x) => x.engine === "voicestudio" && x.id === v.id);
+      return {
+        ...v,
+        engine: "voicestudio",
+        kind: "builtin",
+        descriptor: r?.descriptor || v.descriptor || v.instruct || "",
+        sample_normal: proxy(r?.sample_file || r?.file),
+      };
+    });
+
+    customDesignedVoices = (apiData.custom_designed || []).map((v) => ({
+      ...v,
+      engine: "voicestudio",
+      kind: "designed",
+      descriptor: v.descriptor || v.instruct || "Custom Voice Design",
+      sample_normal: v.sample_ready ? `/api/voices/preview?voice_id=${encodeURIComponent(v.id)}&slot=base&t=${encodeURIComponent(v.updated_at || "")}` : undefined,
     }));
+
+    myClonedVoices = (apiData.my_voices || []).map((v) => {
+      const slots = v.slots || {};
+      const emotionPreviews = {};
+      for (const emo of CLONE_EMOTION_SLOTS) {
+        if (slots[emo]?.preview_ready) {
+          emotionPreviews[emo] = `/api/voices/preview?voice_id=${encodeURIComponent(v.id)}&slot=${encodeURIComponent(emo)}&t=${encodeURIComponent(slots[emo].updated_at || v.updated_at || "")}`;
+        }
+      }
+      return {
+        ...v,
+        engine: "voicestudio",
+        kind: "cloned",
+        is_my_voice: true,
+        descriptor: v.descriptor || "My voice (cloned)",
+        sample_normal: slots.base?.preview_ready
+          ? `/api/voices/preview?voice_id=${encodeURIComponent(v.id)}&slot=base&t=${encodeURIComponent(slots.base.updated_at || v.updated_at || "")}`
+          : undefined,
+        emotion_previews: emotionPreviews,
+      };
+    });
+
+    allVoices = [...myClonedVoices, ...customDesignedVoices, ...vsBuiltinList, ...edgeList];
+    if (voicesSampleText && apiData.sample_text && !voicesSampleText.value.trim()) {
+      voicesSampleText.value = apiData.sample_text;
+    }
+    renderVoicesLibrary();
+    renderMyVoicesList();
+    populateSettingsVoices();
+    applyDefaultsToCreateScreen();
+  }
+
+  function renderVoicesLibrary() {
+    if (!voicesLibraryList) return;
+    const engine = voicesEngineSelect.value || "voicestudio";
+    const q = (voicesFilter.value || "").trim().toLowerCase();
+    const list = allVoices.filter((v) => {
+      if (v.engine !== engine) return false;
+      if (!q) return true;
+      return [v.name, v.descriptor, v.instruct, v.id].some((s) => String(s || "").toLowerCase().includes(q));
+    });
+    if (!list.length) {
+      voicesLibraryList.innerHTML = '<div class="muted">No matching voices.</div>';
+      return;
+    }
+    voicesLibraryList.innerHTML = list.map((v) => {
+      const isCustom = v.kind === "designed" || v.kind === "cloned";
+      const badge = v.is_my_voice
+        ? '<span class="badge ok">My voice</span>'
+        : v.kind === "designed"
+        ? '<span class="badge">Custom</span>'
+        : "";
+      return `
+        <div class="voice-row" data-voice-row="${escapeHtml(v.id)}">
+          <div style="flex:1 1 220px; min-width:0;">
+            <strong>${escapeHtml(v.name)}</strong> ${badge}
+            <div class="muted">${escapeHtml(v.descriptor || "")}${v.seed ? ` · seed ${v.seed}` : ""}</div>
+            ${v.instruct ? `<div class="muted mono" style="font-size:11px;">${escapeHtml(v.instruct)}</div>` : ""}
+          </div>
+          <div class="row" style="margin-top:0;">
+            ${buildVoiceRowButtons(v, "voices")}
+            <button class="secondary" type="button" data-use-voice="${escapeHtml(v.id)}" data-use-engine="${escapeHtml(v.engine)}">Use</button>
+            ${isCustom ? `<button class="danger" type="button" data-del-voice="${escapeHtml(v.id)}">Delete</button>` : ""}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    voicesLibraryList.querySelectorAll("[data-play-voice]").forEach((btn) => {
+      btn.addEventListener("click", () => wireAudioPlay(btn, voicesPlayAudio, voicesPlayStatus, "voices"));
+    });
+    voicesLibraryList.querySelectorAll("[data-use-voice]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const vid = btn.dataset.useVoice;
+        const eng = btn.dataset.useEngine || "voicestudio";
+        selectedVoiceId = vid;
+        voiceOverridden = true;
+        if (settings.voice_engine !== eng) {
+          await setActiveEngine(eng, true);
+        }
+        switchTab("create");
+      });
+    });
+    voicesLibraryList.querySelectorAll("[data-del-voice]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        const r = await api(`/api/voices/custom?id=${encodeURIComponent(btn.dataset.delVoice)}`, { method: "DELETE" });
+        if (!r.ok) {
+          voicesPlayStatus.textContent = r.data.error || "Delete failed.";
+          btn.disabled = false;
+          return;
+        }
+        await loadVoices();
+      });
+    });
+    updatePlayButtons();
+  }
+
+  voicesEngineSelect.addEventListener("change", renderVoicesLibrary);
+  voicesFilter.addEventListener("input", renderVoicesLibrary);
+
+  saveSampleTextBtn.addEventListener("click", async () => {
+    const text = voicesSampleText.value.trim();
+    if (!text) {
+      voicesSampleStatus.textContent = "Enter sample text first.";
+      return;
+    }
+    saveSampleTextBtn.disabled = true;
+    voicesSampleStatus.textContent = "Saving & queueing sample regeneration...";
+    try {
+      const sr = await api("/api/settings", { method: "PUT", body: JSON.stringify({ sample_text: text }) });
+      if (!sr.ok) {
+        voicesSampleStatus.textContent = sr.data.error || "Failed to save sample text.";
+        return;
+      }
+      settings = sr.data.settings;
+      if (setSampleText) setSampleText.value = settings.sample_text || "";
+      const rr = await api("/api/voices/regenerate-samples", { method: "POST" });
+      voicesSampleStatus.textContent = rr.ok
+        ? "Saved sample text and triggered GitHub Actions regeneration."
+        : `Saved text, but dispatch failed: ${rr.data.error || "error"}`;
+    } finally {
+      saveSampleTextBtn.disabled = false;
+    }
+  });
+
+  cvRandomSeedBtn.addEventListener("click", () => {
+    cvSeed.value = String(Math.floor(1 + Math.random() * 2147483000));
+  });
+
+  cvGenerateBtn.addEventListener("click", async () => {
+    hideEl(cvErr);
+    cvStatus.textContent = "Queueing sample generation...";
+    cvGenerateBtn.disabled = true;
+    cvPlayBtn.disabled = true;
+    try {
+      const r = await api("/api/voices/preview-design", {
+        method: "POST",
+        body: JSON.stringify({
+          instruct: cvInstruct.value.trim(),
+          seed: Number(cvSeed.value) || 2001,
+        }),
+      });
+      if (!r.ok) {
+        cvStatus.textContent = "";
+        showErr(cvErr, r.data.error || "Couldn't generate preview.");
+        return;
+      }
+      draftDesignTaskId = r.data.task_id;
+      draftPreviewKey = r.data.preview_key;
+      watchedVoiceTasks.add(draftDesignTaskId);
+      openLogs.add(draftDesignTaskId);
+      cvStatus.textContent = `Generating sample (${draftDesignTaskId})...`;
+      await loadJobs();
+    } finally {
+      cvGenerateBtn.disabled = false;
+    }
+  });
+
+  cvPlayBtn.addEventListener("click", () => {
+    if (!draftPreviewKey) return;
+    if (activePlayKey === "cv:draft:base") {
+      stopNarration();
+      return;
+    }
+    stopNarration();
+    closeBackgroundPreview();
+    activePlayKey = "cv:draft:base";
+    updatePlayButtons();
+    cvPreviewAudio.src = `/api/voices/preview?key=${encodeURIComponent(draftPreviewKey)}&t=${Date.now()}`;
+    cvPreviewAudio.classList.remove("hidden");
+    cvPreviewAudio.play().catch(() => {});
+  });
+
+  cvSaveBtn.addEventListener("click", async () => {
+    hideEl(cvErr);
+    cvSaveBtn.disabled = true;
+    cvStatus.textContent = "Saving custom voice...";
+    try {
+      const r = await api("/api/voices/custom", {
+        method: "POST",
+        body: JSON.stringify({
+          name: cvName.value.trim(),
+          descriptor: cvDescriptor.value.trim(),
+          instruct: cvInstruct.value.trim(),
+          seed: Number(cvSeed.value) || 2001,
+          draft_preview_key: draftPreviewKey || undefined,
+        }),
+      });
+      if (!r.ok) {
+        cvStatus.textContent = "";
+        showErr(cvErr, r.data.error || "Failed to save custom voice.");
+        return;
+      }
+      const created = r.data.voice;
+      cvName.value = "";
+      cvDescriptor.value = "";
+      draftPreviewKey = "";
+      draftDesignTaskId = null;
+      cvPlayBtn.disabled = true;
+      cvStatus.textContent = `Saved "${created.name}".`;
+      await loadVoices();
+    } finally {
+      cvSaveBtn.disabled = false;
+    }
+  });
+
+  function renderEmotionInputs() {
+    if (!mvEmotionInputs) return;
+    mvEmotionInputs.innerHTML = CLONE_EMOTION_SLOTS.map((emo) => `
+      <div class="grid2" style="margin-bottom:6px;">
+        <div>
+          <label for="mvEmoFile_${emo}">${emo} clip (optional)</label>
+          <input id="mvEmoFile_${emo}" type="file" accept="audio/*,.mp3,.wav,.m4a" />
+        </div>
+        <div>
+          <label for="mvEmoText_${emo}">${emo} transcript (optional)</label>
+          <input id="mvEmoText_${emo}" type="text" placeholder="Leave blank for Whisper" />
+        </div>
+      </div>
+    `).join("");
+  }
+  renderEmotionInputs();
+
+  mvSaveBtn.addEventListener("click", async () => {
+    hideEl(mvErr);
+    const name = mvName.value.trim();
+    const baseFile = mvBaseFile.files?.[0];
+    if (!name) {
+      showErr(mvErr, "Enter a name for your voice.");
+      return;
+    }
+    if (!baseFile) {
+      showErr(mvErr, "Choose a base audio clip (3-10 seconds).");
+      return;
+    }
+    mvSaveBtn.disabled = true;
+    mvStatus.textContent = "Creating voice profile...";
+    try {
+      const cr = await api("/api/voices/cloned", {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          descriptor: mvDescriptor.value.trim(),
+        }),
+      });
+      if (!cr.ok) {
+        mvStatus.textContent = "";
+        showErr(mvErr, cr.data.error || "Could not create voice record.");
+        return;
+      }
+      const voiceId = cr.data.voice.id;
+      const uploadSlot = async (slot, file, refText) => {
+        const qs = new URLSearchParams({
+          voice_id: voiceId,
+          slot,
+          filename: file.name || `${slot}.wav`,
+          ref_text: refText || "",
+        });
+        const ur = await api(`/api/voices/cloned/clip?${qs.toString()}`, {
+          method: "POST",
+          rawBody: true,
+          headers: { "Content-Type": file.type || "application/octet-stream" },
+          body: file,
+        });
+        if (!ur.ok) throw new Error(ur.data.error || `Upload failed for ${slot}`);
+      };
+
+      mvStatus.textContent = `Uploading base clip (${baseFile.name})...`;
+      await uploadSlot("base", baseFile, mvBaseText.value.trim());
+
+      for (const emo of CLONE_EMOTION_SLOTS) {
+        const fEl = document.getElementById(`mvEmoFile_${emo}`);
+        const tEl = document.getElementById(`mvEmoText_${emo}`);
+        const ef = fEl?.files?.[0];
+        if (ef) {
+          mvStatus.textContent = `Uploading ${emo} clip...`;
+          await uploadSlot(emo, ef, tEl?.value.trim() || "");
+        }
+      }
+
+      mvStatus.textContent = "Starting prompt cache & preview generation...";
+      const pr = await api("/api/voices/cloned/prepare", {
+        method: "POST",
+        body: JSON.stringify({ voice_id: voiceId }),
+      });
+      if (!pr.ok) {
+        mvStatus.textContent = "";
+        showErr(mvErr, pr.data.error || "Clips saved, but preparation dispatch failed.");
+        await loadVoices();
+        return;
+      }
+      watchedVoiceTasks.add(pr.data.task_id);
+      openLogs.add(pr.data.task_id);
+      mvName.value = "";
+      mvDescriptor.value = "";
+      mvBaseFile.value = "";
+      mvBaseText.value = "";
+      for (const emo of CLONE_EMOTION_SLOTS) {
+        const fEl = document.getElementById(`mvEmoFile_${emo}`);
+        const tEl = document.getElementById(`mvEmoText_${emo}`);
+        if (fEl) fEl.value = "";
+        if (tEl) tEl.value = "";
+      }
+      mvStatus.textContent = `Preparing "${name}" on GitHub Actions (${pr.data.task_id})...`;
+      await loadVoices();
+      await loadJobs();
+    } catch (err) {
+      mvStatus.textContent = "";
+      showErr(mvErr, err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      mvSaveBtn.disabled = false;
+    }
+  });
+
+  function renderMyVoicesList() {
+    if (!mvList) return;
+    if (!myClonedVoices.length) {
+      mvList.innerHTML = '<div class="muted">No cloned voices yet.</div>';
+      return;
+    }
+    mvList.innerHTML = myClonedVoices.map((v) => {
+      const slots = v.slots || {};
+      const slotLines = Object.entries(slots).map(([slot, info]) => {
+        const statusTxt = info.prompt_cached ? "cached" : "pending prepare";
+        const tx = info.ref_text ? ` · "${escapeHtml(info.ref_text.slice(0, 70))}${info.ref_text.length > 70 ? "..." : ""}"` : "";
+        return `<div class="muted">${escapeHtml(slot)}: ${escapeHtml(info.filename || "")} (${statusTxt}${info.auto_transcribed ? ", Whisper" : ""})${tx}</div>`;
+      }).join("");
+      return `
+        <div class="voice-row" data-voice-row="${escapeHtml(v.id)}">
+          <div style="flex:1 1 240px; min-width:0;">
+            <strong>${escapeHtml(v.name)}</strong> <span class="badge ok">My voice</span>
+            <div class="muted">${escapeHtml(v.descriptor || "")}</div>
+            ${slotLines}
+          </div>
+          <div class="row" style="margin-top:0;">
+            ${buildVoiceRowButtons(v, "myvoices")}
+            <button class="secondary" type="button" data-prep-clone="${escapeHtml(v.id)}">Prepare / Refresh</button>
+            <button class="danger" type="button" data-del-clone="${escapeHtml(v.id)}">Delete</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    mvList.querySelectorAll("[data-play-voice]").forEach((btn) => {
+      btn.addEventListener("click", () => wireAudioPlay(btn, mvAudio, mvPlayStatus, "myvoices"));
+    });
+    mvList.querySelectorAll("[data-prep-clone]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        const r = await api("/api/voices/cloned/prepare", {
+          method: "POST",
+          body: JSON.stringify({ voice_id: btn.dataset.prepClone }),
+        });
+        if (r.ok) {
+          watchedVoiceTasks.add(r.data.task_id);
+          openLogs.add(r.data.task_id);
+          mvPlayStatus.textContent = `Queued prepare (${r.data.task_id})...`;
+          await loadJobs();
+        } else {
+          mvPlayStatus.textContent = r.data.error || "Prepare failed.";
+          btn.disabled = false;
+        }
+      });
+    });
+    mvList.querySelectorAll("[data-del-clone]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        await api(`/api/voices/custom?id=${encodeURIComponent(btn.dataset.delClone)}`, { method: "DELETE" });
+        await loadVoices();
+      });
+    });
+    updatePlayButtons();
   }
 
   function populateSettingsVoices() {
     stopNarration();
-    const list = populateVoiceOptions(setDefaultVoice, setVoiceEngine.value);
-    const saved = setVoiceEngine.value === 'voicestudio' ? settings.voicestudio_voice_id : settings.default_voice_id;
-    if (Array.from(setDefaultVoice.options).some(option => option.value === saved)) setDefaultVoice.value = saved;
+    const engine = setVoiceEngine.value || "voicestudio";
+    const list = populateVoiceOptions(setDefaultVoice, engine);
+    const saved = engine === "voicestudio" ? settings.voicestudio_voice_id : settings.default_voice_id;
+    if (Array.from(setDefaultVoice.options).some((o) => o.value === saved)) {
+      setDefaultVoice.value = saved;
+    } else if (list[0]) {
+      setDefaultVoice.value = list[0].id;
+    }
     renderVoiceList(setDefaultVoice, list);
-    engineStatus.textContent = setVoiceEngine.value === 'edge' ? 'Edge TTS ready.' : hasVoiceStudioSamples ? 'VoiceStudio samples ready. A cold runner downloads the model.' : 'VoiceStudio samples not published yet. First run downloads the model.';
+    engineStatus.textContent = engine === "edge"
+      ? "Edge TTS ready."
+      : hasVoiceStudioSamples
+      ? `VoiceStudio ready (${list.length} voices, ${settings.voicestudio_speedup ?? 1.25}x speed-up).`
+      : `VoiceStudio ready (${list.length} voices; release samples generating).`;
   }
-  setVoiceEngine.addEventListener('change', populateSettingsVoices);
+
+  async function setActiveEngine(engine, persist) {
+    const normalized = engine === "edge" ? "edge" : "voicestudio";
+    settings.voice_engine = normalized;
+    if (setVoiceEngine.value !== normalized) setVoiceEngine.value = normalized;
+    if (createVoiceEngine && createVoiceEngine.value !== normalized) createVoiceEngine.value = normalized;
+    voiceOverridden = false;
+    populateSettingsVoices();
+    applyDefaultsToCreateScreen();
+    if (persist) {
+      const r = await api("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify({ voice_engine: normalized }),
+      });
+      if (r.ok && r.data.settings) {
+        settings = r.data.settings;
+        applyDefaultsToCreateScreen();
+      }
+    }
+  }
+
+  setVoiceEngine.addEventListener("change", () => setActiveEngine(setVoiceEngine.value, true));
+  if (createVoiceEngine) {
+    createVoiceEngine.addEventListener("change", () => setActiveEngine(createVoiceEngine.value, true));
+  }
 
   function stopNarration() {
     activePlayKey = null;
@@ -426,6 +960,18 @@
       hideEl(audio);
       status.textContent = "";
     }
+    [
+      { audio: voicesPlayAudio, status: voicesPlayStatus },
+      { audio: cvPreviewAudio, status: null },
+      { audio: mvAudio, status: mvPlayStatus },
+    ].forEach(({ audio, status }) => {
+      if (!audio || !audio.hasAttribute("src")) return;
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+      hideEl(audio);
+      if (status) status.textContent = "";
+    });
     updatePlayButtons();
   }
 
@@ -441,8 +987,12 @@
     const r = await api("/api/settings");
     if (!r.ok || !r.data.settings) return;
     settings = r.data.settings;
-    setVoiceEngine.value = settings.voice_engine || 'edge';
+    const engine = settings.voice_engine || "voicestudio";
+    setVoiceEngine.value = engine;
+    if (createVoiceEngine) createVoiceEngine.value = engine;
     setVoiceSpeedup.value = settings.voicestudio_speedup ?? 1.25;
+    if (setSampleText) setSampleText.value = settings.sample_text || "";
+    if (voicesSampleText) voicesSampleText.value = settings.sample_text || "";
     populateSettingsVoices();
     if (!bgDefaultsDirty) setDefaultBg.value = settings.default_background || "sequential";
     setCadenceCount.value = String(settings.queue_cadence_count ?? 3);
@@ -454,17 +1004,22 @@
   }
 
   function applyDefaultsToCreateScreen() {
-    const engine = settings.voice_engine || 'edge';
-    const noteEl = document.getElementById('createEngineNote');
+    const engine = settings.voice_engine || "voicestudio";
+    if (createVoiceEngine && createVoiceEngine.value !== engine) {
+      createVoiceEngine.value = engine;
+    }
+    const noteEl = document.getElementById("createEngineNote");
     if (noteEl) {
-      noteEl.textContent = engine === 'voicestudio'
+      noteEl.textContent = engine === "voicestudio"
         ? `Engine: VoiceStudio (${settings.voicestudio_speedup ?? 1.25}x speed-up)`
-        : 'Engine: Edge TTS';
+        : "Engine: Edge TTS";
     }
     voices = populateVoiceOptions(voiceSelect, engine);
-    speedInput.disabled = engine === 'voicestudio';
-    const saved = engine === 'voicestudio' ? settings.voicestudio_voice_id : settings.default_voice_id;
-    if (!voiceOverridden || !voices.some(v => v.id === selectedVoiceId)) selectedVoiceId = voices.some(v => v.id === saved) ? saved : voices[0]?.id;
+    speedInput.disabled = engine === "voicestudio";
+    const saved = engine === "voicestudio" ? settings.voicestudio_voice_id : settings.default_voice_id;
+    if (!voiceOverridden || !voices.some((v) => v.id === selectedVoiceId)) {
+      selectedVoiceId = voices.some((v) => v.id === saved) ? saved : (voices[0]?.id || "");
+    }
     voiceSelect.value = selectedVoiceId;
     renderVoiceList(voiceSelect, voices);
     updateCalibratedRate();
@@ -493,19 +1048,25 @@
     settingsStatus.textContent = "Saving...";
     saveSettingsBtn.disabled = true;
     try {
+      const payload = {
+        voice_engine: setVoiceEngine.value,
+        voicestudio_speedup: Number(setVoiceSpeedup.value),
+        ...(setVoiceEngine.value === "edge"
+          ? { default_voice_id: setDefaultVoice.value }
+          : { voicestudio_voice_id: setDefaultVoice.value }),
+        default_background: setDefaultBg.value,
+        queue_cadence_count: Number(setCadenceCount.value) || 3,
+        queue_cadence_unit: setCadenceUnit.value,
+        part2_delay_minutes: Number(setPart2Delay.value) || 20,
+        dry_run: setDryRun.checked,
+        mock_mode: setMockMode.checked,
+      };
+      if (setSampleText && setSampleText.value.trim()) {
+        payload.sample_text = setSampleText.value.trim();
+      }
       const r = await api("/api/settings", {
         method: "PUT",
-        body: JSON.stringify({
-          voice_engine: setVoiceEngine.value,
-          voicestudio_speedup: Number(setVoiceSpeedup.value),
-          ...(setVoiceEngine.value === 'edge' ? {default_voice_id: setDefaultVoice.value} : {voicestudio_voice_id: setDefaultVoice.value}),
-          default_background: setDefaultBg.value,
-          queue_cadence_count: Number(setCadenceCount.value) || 3,
-          queue_cadence_unit: setCadenceUnit.value,
-          part2_delay_minutes: Number(setPart2Delay.value) || 20,
-          dry_run: setDryRun.checked,
-          mock_mode: setMockMode.checked,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!r.ok) {
         settingsStatus.textContent = "";
@@ -513,6 +1074,7 @@
         return;
       }
       settings = r.data.settings;
+      if (voicesSampleText && settings.sample_text) voicesSampleText.value = settings.sample_text;
       voiceOverridden = false;
       bgOverridden = false;
       applyDefaultsToCreateScreen();
@@ -1143,6 +1705,7 @@
         method: "POST",
         body: JSON.stringify({
           production_json: parsed,
+          voice_engine: createVoiceEngine?.value || settings.voice_engine || "voicestudio",
           voice_id: selectedVoiceId,
           voice_speed: speedInput.value.trim() || "+37%",
           target_wpm: Number(wpmInput.value) || 250,
@@ -1305,7 +1868,7 @@
             <span class="${badgeCls}">${escapeHtml(j.status)}</span>
           </div>
           <div class="row" style="margin-top:0;">
-            ${j.status === 'failed' && (j.voice_engine === 'voicestudio' || j.voice_id?.startsWith('vs-')) ? '<button type="button" class="secondary retry-edge-btn" data-id="' + escapeHtml(j.task_id) + '">Re-run with Edge TTS</button>' : ''}
+            ${j.status === 'failed' && (j.voice_engine === 'voicestudio' || j.voice_id?.startsWith('vs')) ? '<button type="button" class="secondary retry-edge-btn" data-id="' + escapeHtml(j.task_id) + '">Re-run with Edge TTS</button>' : ''}
             ${retryBtn}
             <button type="button" class="secondary toggle-logs-btn" data-id="${escapeHtml(j.task_id)}">${logsOpen ? "Hide logs" : "Show logs"}</button>
             ${deleteBtn}
@@ -1530,8 +2093,9 @@
     });
     await Promise.all(tasksToFetchLogs.map((t) => syncLogsForTask(t.task_id)));
 
-    const renderTasks = allTasks.filter((t) => t.kind !== "bg_import");
+    const renderTasks = allTasks.filter((t) => t.kind !== "bg_import" && t.kind !== "voice_sample");
     const bgTasks = allTasks.filter((t) => t.kind === "bg_import");
+    const voiceTasks = allTasks.filter((t) => t.kind === "voice_sample");
 
     // Auto-refresh background library if a bg_import finished since last poll
     const doneId = bgTasks.find((t) => t.status === "done")?.task_id || "";
@@ -1539,11 +2103,42 @@
     lastSeenBgImportDoneId = doneId;
     if (updatedLibrary) await loadBackgrounds();
 
+    let refreshVoicesNow = false;
+    for (const vt of voiceTasks) {
+      if (watchedVoiceTasks.has(vt.task_id) && (vt.status === "done" || vt.status === "failed")) {
+        watchedVoiceTasks.delete(vt.task_id);
+        if (vt.task_id === draftDesignTaskId) {
+          if (vt.status === "done") {
+            cvPlayBtn.disabled = false;
+            cvStatus.textContent = "Sample ready — click Play preview or Save voice.";
+          } else {
+            showErr(cvErr, vt.error || "Voice design preview failed.");
+            cvStatus.textContent = "";
+          }
+        } else {
+          refreshVoicesNow = true;
+          mvStatus.textContent = vt.status === "done" ? "Cloned voice prepared & cached." : `Prepare failed: ${vt.error || "error"}`;
+        }
+      }
+    }
+    if (refreshVoicesNow) await loadVoices();
+
     if (!renderTasks.length) {
       jobsList.innerHTML = '<div class="muted">No render tasks yet. (Previously published videos are automatically cleaned up once live on all accounts.)</div>';
     } else {
       jobsList.innerHTML = renderTasks.map(renderTaskCard).join("");
       wireTaskButtons(jobsList);
+    }
+
+    if (voiceTasksWrap) {
+      if (voiceTasks.length) {
+        voiceTasksWrap.classList.remove("hidden");
+        voiceTasksWrap.innerHTML = `<h3>Recent Voice Tool Tasks</h3>` + voiceTasks.slice(0, 5).map(renderTaskCard).join("");
+        wireTaskButtons(voiceTasksWrap);
+      } else {
+        voiceTasksWrap.classList.add("hidden");
+        voiceTasksWrap.innerHTML = "";
+      }
     }
 
     if (bgTasks.length) {

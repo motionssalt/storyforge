@@ -69,6 +69,7 @@
     </div>
     <div id="navBar" class="row hidden" style="margin-top: 0;">
       <button id="tabCreateBtn" type="button" class="active-tab">Create Video</button>
+      <button id="tabVoicesBtn" type="button" class="secondary">Voices</button>
       <button id="tabSettingsBtn" type="button" class="secondary">Settings</button>
       <button id="logoutBtn" class="secondary" type="button">Log out</button>
     </div>
@@ -126,8 +127,19 @@
 
     <section>
       <h2>3. Render &amp; Publishing Settings</h2>
+      <div class="grid2">
+        <div>
+          <label for="createVoiceEngine">Narration engine</label>
+          <select id="createVoiceEngine">
+            <option value="voicestudio">VoiceStudio</option>
+            <option value="edge">Edge TTS</option>
+          </select>
+        </div>
+        <div style="display:flex; align-items:flex-end;">
+          <div id="createEngineNote" class="muted" style="padding-bottom:8px;"></div>
+        </div>
+      </div>
       <label for="voiceSelect">Narrator for this video</label>
-      <div id="createEngineNote" class="muted" style="margin-bottom:4px;"></div>
       <select id="voiceSelect" class="hidden" aria-hidden="true"></select>
       <div data-narration="create"></div>
       <div class="grid2">
@@ -183,13 +195,132 @@
     </section>
   </main>
 
+  <!-- VOICES VIEW -->
+  <main id="voicesView" class="hidden">
+    <section>
+      <h2>Voice Library &amp; Preview Text</h2>
+      <div class="grid2">
+        <div>
+          <label for="voicesEngineSelect">Engine</label>
+          <select id="voicesEngineSelect">
+            <option value="voicestudio">VoiceStudio</option>
+            <option value="edge">Edge TTS</option>
+          </select>
+        </div>
+        <div>
+          <label for="voicesFilter">Filter voices</label>
+          <input id="voicesFilter" type="text" placeholder="Search name, accent, pitch..." />
+        </div>
+      </div>
+      <div id="voicesLibraryList" class="voice-list" style="max-height:360px; margin-top:10px;">Loading voices...</div>
+      <audio id="voicesPlayAudio" class="hidden" controls preload="none"></audio>
+      <div id="voicesPlayStatus" class="muted" role="status" style="margin-top:4px;"></div>
+
+      <details style="margin-top:12px;">
+        <summary>Preview sample text</summary>
+        <label for="voicesSampleText">Narration sample text used for previews (8-12s normal dialogue)</label>
+        <textarea id="voicesSampleText" rows="3"></textarea>
+        <div class="row">
+          <button id="saveSampleTextBtn" type="button" class="secondary">Save text &amp; regenerate samples</button>
+          <span id="voicesSampleStatus" class="muted" role="status"></span>
+        </div>
+      </details>
+    </section>
+
+    <section>
+      <h2>Create a voice (Voice Design)</h2>
+      <div class="muted">Describe a synthetic voice using OmniVoice attributes, pick a seed, generate a sample, preview it, and save.</div>
+      <div class="grid2">
+        <div>
+          <label for="cvName">Voice name</label>
+          <input id="cvName" type="text" maxlength="60" placeholder="e.g. Marcus Deep Radio" />
+        </div>
+        <div>
+          <label for="cvDescriptor">Short label (optional)</label>
+          <input id="cvDescriptor" type="text" maxlength="120" placeholder="e.g. Deep male, British" />
+        </div>
+      </div>
+      <label for="cvInstruct">Voice description (instruct string)</label>
+      <input id="cvInstruct" type="text" placeholder="female, young adult, low pitch, american accent" />
+      <div class="muted" style="margin-top:4px;">
+        Allowed attributes (comma-separated, max 1 per category):
+        gender (<code>male</code>, <code>female</code>);
+        age (<code>child</code>, <code>teenager</code>, <code>young adult</code>, <code>middle-aged</code>, <code>elderly</code> — omit for adult);
+        pitch (<code>very low pitch</code>, <code>low pitch</code>, <code>moderate pitch</code>, <code>high pitch</code>, <code>very high pitch</code>);
+        accent (<code>american accent</code>, <code>british accent</code>, <code>australian accent</code>, <code>canadian accent</code>, <code>indian accent</code>, <code>chinese accent</code>, <code>korean accent</code>, <code>japanese accent</code>, <code>portuguese accent</code>, <code>russian accent</code>).
+      </div>
+      <div class="grid2">
+        <div>
+          <label for="cvSeed">Seed</label>
+          <input id="cvSeed" type="number" min="1" max="2147483647" value="2001" />
+        </div>
+        <div style="display:flex; align-items:flex-end;">
+          <button id="cvRandomSeedBtn" type="button" class="secondary">Random seed</button>
+        </div>
+      </div>
+      <div class="row">
+        <button id="cvGenerateBtn" type="button">Generate sample</button>
+        <button id="cvPlayBtn" type="button" class="secondary" disabled>Play preview</button>
+        <button id="cvSaveBtn" type="button" class="secondary">Save voice</button>
+        <span id="cvStatus" class="muted" role="status"></span>
+      </div>
+      <audio id="cvPreviewAudio" class="hidden" controls preload="none"></audio>
+      <div id="cvErr" class="err hidden"></div>
+    </section>
+
+    <section>
+      <h2>My voices (Clone from short clip)</h2>
+      <div class="warn" style="margin-top:0; margin-bottom:10px;">
+        <strong>Notice:</strong> Only use your own voice or a voice whose owner agreed; do not clone public figures.
+        Keep clips short (3-10 seconds, clean speech); longer clips slow inference and reduce quality. Clips are stored privately in the KV vault, never in the public repository.
+      </div>
+      <div class="grid2">
+        <div>
+          <label for="mvName">Voice name</label>
+          <input id="mvName" type="text" maxlength="60" placeholder="e.g. My Narrator Voice" />
+        </div>
+        <div>
+          <label for="mvDescriptor">Short label (optional)</label>
+          <input id="mvDescriptor" type="text" maxlength="120" placeholder="e.g. Warm Nigerian English" />
+        </div>
+      </div>
+      <div class="grid2">
+        <div>
+          <label for="mvBaseFile">Base voice clip (3-10s .mp3 / .wav / .m4a)</label>
+          <input id="mvBaseFile" type="file" accept="audio/*,.mp3,.wav,.m4a" />
+        </div>
+        <div>
+          <label for="mvBaseText">Base transcript (optional — leave blank for Whisper)</label>
+          <input id="mvBaseText" type="text" placeholder="Leave blank to auto-transcribe" />
+        </div>
+      </div>
+      <details style="margin-top:10px;">
+        <summary>Optional per-emotion reference clips (calm, tense, angry, shocked, sad, sarcastic, excited)</summary>
+        <div class="muted" style="margin-top:6px;">When a script line has an emotion label, that emotion's clip is used; lines without a matching clip fall back to the base clip.</div>
+        <div id="mvEmotionInputs" style="margin-top:8px;"></div>
+      </details>
+      <div class="row">
+        <button id="mvSaveBtn" type="button">Save &amp; prepare voice</button>
+        <span id="mvStatus" class="muted" role="status"></span>
+      </div>
+      <div id="mvErr" class="err hidden"></div>
+
+      <h3>Saved My voices</h3>
+      <div id="mvList" class="muted">No cloned voices yet.</div>
+      <audio id="mvAudio" class="hidden" controls preload="none"></audio>
+      <div id="mvPlayStatus" class="muted" role="status" style="margin-top:4px;"></div>
+    </section>
+
+    <div id="voiceTasksWrap" class="hidden"></div>
+  </main>
+
   <!-- SETTINGS VIEW (SF-006 / SF-005 / SF-008 / SF-009) -->
   <main id="settingsView" class="hidden">
     <section>
       <h2>Narration &amp; Background Defaults</h2>
       <div class="grid2">
         <div>
-          <label for="setVoiceEngine">Voice engine</label><select id="setVoiceEngine"><option value="edge">Edge TTS</option><option value="voicestudio">VoiceStudio</option></select>
+          <label for="setVoiceEngine">Voice engine</label><select id="setVoiceEngine"><option value="voicestudio">VoiceStudio</option><option value="edge">Edge TTS</option></select>
           <label for="setVoiceSpeedup">VoiceStudio speed-up</label><input id="setVoiceSpeedup" type="number" min="1" max="2" step="0.01" value="1.25">
           <div id="voiceEngineStatus" class="muted" role="status"></div>
           <label for="setDefaultVoice">Default narrator voice</label>
@@ -201,6 +332,8 @@
           <select id="setDefaultBg">
             <option value="sequential">Next in sequence (rotate library)</option>
           </select>
+          <label for="setSampleText">Voice preview sample text</label>
+          <textarea id="setSampleText" rows="3"></textarea>
         </div>
       </div>
 

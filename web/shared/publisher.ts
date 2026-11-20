@@ -963,7 +963,7 @@ async function cancelGitHubWorkflowRunsForTask(
   const cancelled: number[] = [];
   if (!env.GITHUB_TOKEN) return cancelled;
   const repo = env.GITHUB_REPO || "motionssalt/storyforge";
-  const workflowFile = kind === "bg_import" ? "background-import.yml" : "render.yml";
+  const workflowFile = kind === "bg_import" ? "background-import.yml" : kind === "voice_sample" ? "voice-tool.yml" : "render.yml";
   const headers = {
     Authorization: `Bearer ${env.GITHUB_TOKEN}`,
     Accept: "application/vnd.github+json",

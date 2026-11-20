@@ -2,18 +2,33 @@ import { normalizeProduction } from '../../shared/production.mjs';
 import validateSchema from "../../lib/production-validator.js";
 import {
   appendTaskLogs,
+  CustomVoiceRecord,
+  deleteCustomVoice,
+  getCustomVoice,
   getRuntimeState,
   getSettings,
   getTaskFull,
   getTaskLogs,
   isTaskDeleted,
+  listCustomVoices,
   listTasksFull,
   listZernioAccounts,
   listZernioKeys,
+  saveCustomVoice,
   saveSettings,
   setRuntimeState,
   setTaskWorkflowRunId,
 } from "../../shared/db";
+import {
+  BUILTIN_EDGE_VOICES,
+  BUILTIN_VOICESTUDIO_MAP,
+  BUILTIN_VOICESTUDIO_VOICES,
+  deleteKvBinary,
+  getKvBinary,
+  putKvBinary,
+  VALID_CLONE_SLOTS,
+  validateOmnivoiceInstruct,
+} from "../../shared/voices";
 import {
   cleanupPublishedTask,
   deleteGitHubRenderAssetsForTask,
@@ -498,11 +513,17 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         if (!legacy) return jsonResp({ error: "Job not found" }, 404);
         return new Response(legacy, { headers: { "Content-Type": "application/json" } });
       }
+      const taskVoiceRaw = await getRuntimeState(db, undefined, `task_voice:${id}`, "{}");
+      let taskVoice: any = {};
+      try { taskVoice = JSON.parse(taskVoiceRaw); } catch {}
+      const customVoice = row.voice_id ? await getCustomVoice(db, String(row.voice_id)) : null;
       return jsonResp({
         job_id: row.task_id,
         voice_id: row.voice_id,
         voice_speed: row.voice_speed,
-        ...JSON.parse(await getRuntimeState(db, undefined, `task_voice:${id}`, "{}")),
+        voice_engine: taskVoice.voice_engine || "voicestudio",
+        voicestudio_speedup: taskVoice.voicestudio_speedup ?? 1.25,
+        voice_config: customVoice || taskVoice.voice_config || null,
         target_wpm: row.target_wpm,
         background_mode: row.background_mode || "sequential",
         background_index: Number(row.background_index || 0),
@@ -678,6 +699,98 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       return jsonResp({ ok: true });
     }
 
+    if (path === "/api/internal/voice-sample-config" && request.method === "GET") {
+      const settings = await getSettings(db);
+      return jsonResp({
+        sample_text: settings.sample_text,
+        voicestudio_speedup: settings.voicestudio_speedup,
+      });
+    }
+
+    if (path === "/api/internal/voice-config" && request.method === "GET") {
+      const voiceId = String(url.searchParams.get("voice_id") || "").trim();
+      if (!voiceId) return jsonResp({ error: "Missing voice_id" }, 400);
+      const custom = await getCustomVoice(db, voiceId);
+      if (custom) return jsonResp(custom);
+      const builtin = BUILTIN_VOICESTUDIO_MAP.get(voiceId);
+      if (builtin) return jsonResp({ ...builtin, kind: "designed" });
+      return jsonResp({ error: "Voice not found" }, 404);
+    }
+
+    if (path === "/api/internal/voice-clip" && request.method === "GET") {
+      const voiceId = String(url.searchParams.get("voice_id") || "").trim();
+      const slot = String(url.searchParams.get("slot") || "base").trim();
+      if (!voiceId || !VALID_CLONE_SLOTS.has(slot)) return jsonResp({ error: "Invalid voice_id or slot" }, 400);
+      const item = await getKvBinary(env.STORYFORGE_VAULT, `voice_clip:${voiceId}:${slot}`);
+      if (!item) return jsonResp({ error: "Clip not found" }, 404);
+      return new Response(item.data, {
+        status: 200,
+        headers: {
+          "Content-Type": String(item.meta?.content_type || "application/octet-stream"),
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
+    if (path === "/api/internal/voice-prompt" && request.method === "GET") {
+      const voiceId = String(url.searchParams.get("voice_id") || "").trim();
+      const slot = String(url.searchParams.get("slot") || "base").trim();
+      if (!voiceId || !VALID_CLONE_SLOTS.has(slot)) return jsonResp({ error: "Invalid voice_id or slot" }, 400);
+      const item = await getKvBinary(env.STORYFORGE_VAULT, `voice_prompt:${voiceId}:${slot}`);
+      if (!item) return jsonResp({ error: "Prompt not cached" }, 404);
+      return new Response(item.data, {
+        status: 200,
+        headers: { "Content-Type": "application/octet-stream", "Cache-Control": "no-store" },
+      });
+    }
+
+    if (path === "/api/internal/voice-prompt" && request.method === "POST") {
+      const voiceId = String(url.searchParams.get("voice_id") || "").trim();
+      const slot = String(url.searchParams.get("slot") || "base").trim();
+      const refText = String(url.searchParams.get("ref_text") || "").trim();
+      const autoTranscribed = url.searchParams.get("auto_transcribed") === "1";
+      if (!voiceId || !VALID_CLONE_SLOTS.has(slot)) return jsonResp({ error: "Invalid voice_id or slot" }, 400);
+      const bytes = await request.arrayBuffer();
+      if (!bytes.byteLength) return jsonResp({ error: "Empty prompt payload" }, 400);
+      await putKvBinary(env.STORYFORGE_VAULT, `voice_prompt:${voiceId}:${slot}`, bytes, {
+        content_type: "application/octet-stream",
+      });
+      const existing = await getCustomVoice(db, voiceId);
+      if (existing && existing.slots && existing.slots[slot]) {
+        existing.slots[slot].prompt_cached = true;
+        if (refText) existing.slots[slot].ref_text = refText;
+        existing.slots[slot].auto_transcribed = autoTranscribed;
+        existing.updated_at = new Date().toISOString();
+        await saveCustomVoice(db, existing);
+      }
+      return jsonResp({ ok: true, size_bytes: bytes.byteLength });
+    }
+
+    if (path === "/api/internal/voice-preview" && request.method === "POST") {
+      const explicitKey = String(url.searchParams.get("key") || "").trim();
+      const voiceId = String(url.searchParams.get("voice_id") || "").trim();
+      const slot = String(url.searchParams.get("slot") || "base").trim();
+      const kvKey = explicitKey || (voiceId ? `voice_preview:${voiceId}:${slot}` : "");
+      if (!kvKey || !kvKey.startsWith("voice_preview:")) {
+        return jsonResp({ error: "Invalid preview key" }, 400);
+      }
+      const bytes = await request.arrayBuffer();
+      if (!bytes.byteLength) return jsonResp({ error: "Empty preview audio" }, 400);
+      await putKvBinary(env.STORYFORGE_VAULT, kvKey, bytes, { content_type: "audio/mpeg" });
+      if (voiceId) {
+        const existing = await getCustomVoice(db, voiceId);
+        if (existing) {
+          if (existing.kind === "designed") existing.sample_ready = true;
+          if (existing.kind === "cloned" && existing.slots?.[slot]) {
+            existing.slots[slot].preview_ready = true;
+          }
+          existing.updated_at = new Date().toISOString();
+          await saveCustomVoice(db, existing);
+        }
+      }
+      return jsonResp({ ok: true, key: kvKey, size_bytes: bytes.byteLength });
+    }
+
     return jsonResp({ error: "Unknown internal endpoint" }, 404);
   }
 
@@ -723,7 +836,19 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       if (!(speed >= 1 && speed <= 2)) return jsonResp({error: 'VoiceStudio speed-up must be between 1 and 2.'}, 400);
       patch.voicestudio_speedup = speed;
     }
-    if (['vs-harper','vs-rowan','vs-morgan'].includes(body.voicestudio_voice_id)) patch.voicestudio_voice_id = body.voicestudio_voice_id;
+    if (typeof body.voicestudio_voice_id === "string" && body.voicestudio_voice_id.trim()) {
+      const vid = body.voicestudio_voice_id.trim();
+      if (BUILTIN_VOICESTUDIO_MAP.has(vid) || (await getCustomVoice(db, vid))) {
+        patch.voicestudio_voice_id = vid;
+      }
+    }
+    if (typeof body.sample_text === "string") {
+      const st = body.sample_text.trim();
+      if (!st || st.length > 600) {
+        return jsonResp({ error: "Sample text must be 1 to 600 characters." }, 400);
+      }
+      patch.sample_text = st;
+    }
     if (typeof body.default_voice_id === "string" && body.default_voice_id.trim()) {
       patch.default_voice_id = body.default_voice_id.trim();
     }
@@ -755,6 +880,308 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
     const settings = await saveSettings(db, patch);
     return jsonResp({ settings });
+  }
+
+
+  // --- Voices (Built-in, Create a voice, My voices cloning) ---
+  if (path === "/api/voices" && request.method === "GET") {
+    const [settings, customVoices] = await Promise.all([getSettings(db), listCustomVoices(db)]);
+    return jsonResp({
+      edge: BUILTIN_EDGE_VOICES,
+      voicestudio_builtin: BUILTIN_VOICESTUDIO_VOICES,
+      custom_designed: customVoices.filter((v) => v.kind === "designed"),
+      my_voices: customVoices.filter((v) => v.kind === "cloned"),
+      sample_text: settings.sample_text,
+      voicestudio_speedup: settings.voicestudio_speedup,
+    });
+  }
+
+  if (path === "/api/voices/preview" && (request.method === "GET" || request.method === "HEAD")) {
+    const explicitKey = String(url.searchParams.get("key") || "").trim();
+    const voiceId = String(url.searchParams.get("voice_id") || "").trim();
+    const slot = String(url.searchParams.get("slot") || "base").trim();
+    const kvKey = explicitKey || (voiceId ? `voice_preview:${voiceId}:${slot}` : "");
+    if (!kvKey || !kvKey.startsWith("voice_preview:")) {
+      return jsonResp({ error: "Invalid preview key" }, 400);
+    }
+    const item = await getKvBinary(env.STORYFORGE_VAULT, kvKey);
+    if (!item) return jsonResp({ error: "Preview not generated yet." }, 404);
+    const len = item.data.byteLength;
+    return new Response(request.method === "HEAD" ? null : item.data, {
+      status: 200,
+      headers: {
+        "Content-Type": "audio/mpeg",
+        "Content-Length": String(len),
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  if (path === "/api/voices/preview-design" && request.method === "POST") {
+    let body: any = {};
+    try { body = await request.json(); } catch { return jsonResp({ error: "Invalid JSON body" }, 400); }
+    const check = validateOmnivoiceInstruct(String(body.instruct || ""));
+    if (!check.ok) return jsonResp({ error: check.error }, 400);
+    const seed = Math.max(1, Math.min(2147483647, Math.round(Number(body.seed) || 1001)));
+    const taskId = `vt_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 6)}`;
+    const previewKey = `voice_preview:draft_${taskId}:base`;
+    const nowIso = new Date().toISOString();
+    await db
+      .prepare(
+        `INSERT INTO tasks (task_id, kind, series_title, status, progress_pct, current_stage, created_at, updated_at)
+         VALUES (?, 'voice_sample', ?, 'queued', 0, 'queued', ?, ?)`
+      )
+      .bind(taskId, `Preview voice design (${check.normalized})`, nowIso, nowIso)
+      .run();
+    await appendTaskLogs(db, taskId, [
+      { ts: nowIso, level: "info", stage: "queued", message: `Queued Voice Design preview (${check.normalized}, seed=${seed})`, progress_pct: 0 },
+    ]);
+    const repo = env.GITHUB_REPO || "motionssalt/storyforge";
+    const ghRes = await fetch(
+      `https://api.github.com/repos/${repo}/actions/workflows/voice-tool.yml/dispatches`,
+      {
+        method: "POST",
+        headers: ghHeaders(env, { "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          ref: "main",
+          inputs: {
+            task_id: taskId,
+            mode: "design_preview",
+            instruct: check.normalized,
+            seed: String(seed),
+            preview_key: previewKey,
+          },
+        }),
+      }
+    );
+    if (!ghRes.ok) {
+      const errTxt = (await ghRes.text()).slice(0, 300);
+      await db.prepare("UPDATE tasks SET status = 'failed', error = ?, updated_at = ? WHERE task_id = ?").bind(errTxt, new Date().toISOString(), taskId).run();
+      return jsonResp({ error: `GitHub dispatch failed (${ghRes.status}): ${errTxt}` }, 502);
+    }
+    return jsonResp({ task_id: taskId, preview_key: previewKey, instruct: check.normalized, seed });
+  }
+
+  if (path === "/api/voices/custom" && request.method === "POST") {
+    let body: any = {};
+    try { body = await request.json(); } catch { return jsonResp({ error: "Invalid JSON body" }, 400); }
+    const name = String(body.name || "").trim().slice(0, 60);
+    if (!name) return jsonResp({ error: "Enter a voice name." }, 400);
+    const check = validateOmnivoiceInstruct(String(body.instruct || ""));
+    if (!check.ok) return jsonResp({ error: check.error }, 400);
+    const seed = Math.max(1, Math.min(2147483647, Math.round(Number(body.seed) || 1001)));
+    const descriptor = String(body.descriptor || "").trim().slice(0, 120) || check.normalized;
+    const id = `vsc_${crypto.randomUUID().slice(0, 8)}`;
+    const nowIso = new Date().toISOString();
+
+    let sampleReady = false;
+    const draftKey = String(body.draft_preview_key || "").trim();
+    if (draftKey && draftKey.startsWith("voice_preview:draft_")) {
+      const draftAudio = await getKvBinary(env.STORYFORGE_VAULT, draftKey);
+      if (draftAudio) {
+        await putKvBinary(env.STORYFORGE_VAULT, `voice_preview:${id}:base`, draftAudio.data, { content_type: "audio/mpeg" });
+        await deleteKvBinary(env.STORYFORGE_VAULT, draftKey);
+        sampleReady = true;
+      }
+    }
+
+    const rec: CustomVoiceRecord = {
+      id,
+      kind: "designed",
+      engine: "voicestudio",
+      name,
+      descriptor,
+      instruct: check.normalized,
+      seed,
+      sample_ready: sampleReady,
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
+    await saveCustomVoice(db, rec);
+    return jsonResp({ voice: rec });
+  }
+
+  if (path === "/api/voices/custom" && request.method === "DELETE") {
+    const id = String(url.searchParams.get("id") || "").trim();
+    if (!id) return jsonResp({ error: "Missing id" }, 400);
+    const existing = await getCustomVoice(db, id);
+    if (!existing) return jsonResp({ error: "Voice not found" }, 404);
+    for (const slot of VALID_CLONE_SLOTS) {
+      await Promise.all([
+        deleteKvBinary(env.STORYFORGE_VAULT, `voice_clip:${id}:${slot}`),
+        deleteKvBinary(env.STORYFORGE_VAULT, `voice_prompt:${id}:${slot}`),
+        deleteKvBinary(env.STORYFORGE_VAULT, `voice_preview:${id}:${slot}`),
+      ]);
+    }
+    await deleteCustomVoice(db, id);
+    const settings = await getSettings(db);
+    if (settings.voicestudio_voice_id === id) {
+      await saveSettings(db, { voicestudio_voice_id: "vs-harper" });
+    }
+    return jsonResp({ ok: true, deleted_id: id });
+  }
+
+  if (path === "/api/voices/cloned" && request.method === "POST") {
+    let body: any = {};
+    try { body = await request.json(); } catch { return jsonResp({ error: "Invalid JSON body" }, 400); }
+    const name = String(body.name || "").trim().slice(0, 60);
+    if (!name) return jsonResp({ error: "Enter a name for your voice." }, 400);
+    const existingId = String(body.id || "").trim();
+    const nowIso = new Date().toISOString();
+    let rec: CustomVoiceRecord | null = existingId ? await getCustomVoice(db, existingId) : null;
+    if (existingId && (!rec || rec.kind !== "cloned")) {
+      return jsonResp({ error: "Cloned voice not found." }, 404);
+    }
+    const id = rec ? rec.id : `vsm_${crypto.randomUUID().slice(0, 8)}`;
+    const descriptor = String(body.descriptor || "").trim().slice(0, 120) || "My voice (cloned)";
+    rec = {
+      id,
+      kind: "cloned",
+      engine: "voicestudio",
+      name,
+      descriptor,
+      is_my_voice: true,
+      slots: rec?.slots || {},
+      created_at: rec?.created_at || nowIso,
+      updated_at: nowIso,
+    };
+    await saveCustomVoice(db, rec);
+    return jsonResp({ voice: rec });
+  }
+
+  if (path === "/api/voices/cloned/clip" && request.method === "POST") {
+    const voiceId = String(url.searchParams.get("voice_id") || "").trim();
+    const slot = String(url.searchParams.get("slot") || "base").trim();
+    const filename = String(url.searchParams.get("filename") || "clip.wav").replace(/[^A-Za-z0-9._-]/g, "_").slice(-64);
+    const refText = String(url.searchParams.get("ref_text") || "").trim().slice(0, 1000);
+    if (!voiceId || !VALID_CLONE_SLOTS.has(slot)) {
+      return jsonResp({ error: "Invalid voice_id or emotion slot." }, 400);
+    }
+    const rec = await getCustomVoice(db, voiceId);
+    if (!rec || rec.kind !== "cloned") {
+      return jsonResp({ error: "Cloned voice not found." }, 404);
+    }
+    const contentLen = Number(request.headers.get("Content-Length") || 0);
+    if (contentLen > 20 * 1024 * 1024) {
+      return jsonResp({ error: "Clip exceeds 20 MiB limit. Use a clean 3-10 second audio clip." }, 413);
+    }
+    const bytes = await request.arrayBuffer();
+    if (!bytes.byteLength) return jsonResp({ error: "Empty audio clip." }, 400);
+    if (bytes.byteLength > 20 * 1024 * 1024) {
+      return jsonResp({ error: "Clip exceeds 20 MiB limit." }, 413);
+    }
+    const ct = request.headers.get("Content-Type") || "application/octet-stream";
+    await putKvBinary(env.STORYFORGE_VAULT, `voice_clip:${voiceId}:${slot}`, bytes, {
+      content_type: ct,
+      filename,
+    });
+    // Invalidate cached .pt prompt and preview when clip changes
+    await Promise.all([
+      deleteKvBinary(env.STORYFORGE_VAULT, `voice_prompt:${voiceId}:${slot}`),
+      deleteKvBinary(env.STORYFORGE_VAULT, `voice_preview:${voiceId}:${slot}`),
+    ]);
+    rec.slots = rec.slots || {};
+    rec.slots[slot] = {
+      filename,
+      content_type: ct,
+      size_bytes: bytes.byteLength,
+      ref_text: refText,
+      auto_transcribed: false,
+      prompt_cached: false,
+      preview_ready: false,
+      updated_at: new Date().toISOString(),
+    };
+    rec.updated_at = new Date().toISOString();
+    await saveCustomVoice(db, rec);
+    return jsonResp({ voice: rec });
+  }
+
+  if (path === "/api/voices/cloned/clip" && request.method === "DELETE") {
+    const voiceId = String(url.searchParams.get("voice_id") || "").trim();
+    const slot = String(url.searchParams.get("slot") || "").trim();
+    if (!voiceId || !VALID_CLONE_SLOTS.has(slot) || slot === "base") {
+      return jsonResp({ error: "Cannot delete base slot; delete the whole voice instead." }, 400);
+    }
+    const rec = await getCustomVoice(db, voiceId);
+    if (!rec || rec.kind !== "cloned") return jsonResp({ error: "Cloned voice not found." }, 404);
+    await Promise.all([
+      deleteKvBinary(env.STORYFORGE_VAULT, `voice_clip:${voiceId}:${slot}`),
+      deleteKvBinary(env.STORYFORGE_VAULT, `voice_prompt:${voiceId}:${slot}`),
+      deleteKvBinary(env.STORYFORGE_VAULT, `voice_preview:${voiceId}:${slot}`),
+    ]);
+    if (rec.slots) delete rec.slots[slot];
+    rec.updated_at = new Date().toISOString();
+    await saveCustomVoice(db, rec);
+    return jsonResp({ voice: rec });
+  }
+
+  if (path === "/api/voices/cloned/prepare" && request.method === "POST") {
+    let body: any = {};
+    try { body = await request.json(); } catch { return jsonResp({ error: "Invalid JSON body" }, 400); }
+    const voiceId = String(body.voice_id || "").trim();
+    const rec = await getCustomVoice(db, voiceId);
+    if (!rec || rec.kind !== "cloned" || !rec.slots?.base) {
+      return jsonResp({ error: "Upload a base clip before preparing this voice." }, 400);
+    }
+    const taskId = `vt_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 6)}`;
+    const nowIso = new Date().toISOString();
+    await db
+      .prepare(
+        `INSERT INTO tasks (task_id, kind, series_title, status, progress_pct, current_stage, created_at, updated_at)
+         VALUES (?, 'voice_sample', ?, 'queued', 0, 'queued', ?, ?)`
+      )
+      .bind(taskId, `Prepare cloned voice: ${rec.name}`, nowIso, nowIso)
+      .run();
+    await appendTaskLogs(db, taskId, [
+      { ts: nowIso, level: "info", stage: "queued", message: `Queued prompt cache & preview generation for "${rec.name}"`, progress_pct: 0 },
+    ]);
+    const repo = env.GITHUB_REPO || "motionssalt/storyforge";
+    const ghRes = await fetch(
+      `https://api.github.com/repos/${repo}/actions/workflows/voice-tool.yml/dispatches`,
+      {
+        method: "POST",
+        headers: ghHeaders(env, { "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          ref: "main",
+          inputs: {
+            task_id: taskId,
+            mode: "prepare_cloned",
+            voice_id: voiceId,
+          },
+        }),
+      }
+    );
+    if (!ghRes.ok) {
+      const errTxt = (await ghRes.text()).slice(0, 300);
+      await db.prepare("UPDATE tasks SET status = 'failed', error = ?, updated_at = ? WHERE task_id = ?").bind(errTxt, new Date().toISOString(), taskId).run();
+      return jsonResp({ error: `GitHub dispatch failed (${ghRes.status}): ${errTxt}` }, 502);
+    }
+    return jsonResp({ task_id: taskId });
+  }
+
+  if (path === "/api/voices/regenerate-samples" && request.method === "POST") {
+    const settings = await getSettings(db);
+    const repo = env.GITHUB_REPO || "motionssalt/storyforge";
+    const ghRes = await fetch(
+      `https://api.github.com/repos/${repo}/actions/workflows/generate-voice-samples.yml/dispatches`,
+      {
+        method: "POST",
+        headers: ghHeaders(env, { "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          ref: "main",
+          inputs: {
+            sample_text: settings.sample_text,
+            voicestudio_speedup: String(settings.voicestudio_speedup),
+          },
+        }),
+      }
+    );
+    if (!ghRes.ok) {
+      const errTxt = (await ghRes.text()).slice(0, 300);
+      return jsonResp({ error: `GitHub dispatch failed (${ghRes.status}): ${errTxt}` }, 502);
+    }
+    return jsonResp({ ok: true });
   }
 
   // --- SF-005: Zernio Keys & Accounts ---
@@ -1286,10 +1713,26 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
 
     const settings = await getSettings(db);
-    const voiceEngine = body.retry_edge_task ? 'edge' : settings.voice_engine;
-    const voiceId = String(body.retry_edge_task ? settings.default_voice_id : body.voice_id || (voiceEngine === 'voicestudio' ? settings.voicestudio_voice_id : settings.default_voice_id));
-    if (voiceEngine === 'voicestudio' && !['vs-harper','vs-rowan','vs-morgan'].includes(voiceId)) return jsonResp({error: 'Choose a VoiceStudio narrator.'}, 400);
-    if (voiceEngine === 'edge' && !/^[a-z]{2,3}-[A-Z]{2}-[A-Za-z0-9]+Neural$/.test(voiceId)) return jsonResp({error: 'Choose an Edge TTS narrator.'}, 400);
+    const requestedEngine = body.voice_engine === "edge" || body.voice_engine === "voicestudio" ? body.voice_engine : settings.voice_engine;
+    const voiceEngine: "edge" | "voicestudio" = body.retry_edge_task ? "edge" : requestedEngine;
+    const voiceId = String(
+      body.retry_edge_task
+        ? settings.default_voice_id
+        : body.voice_id || (voiceEngine === "voicestudio" ? settings.voicestudio_voice_id : settings.default_voice_id)
+    ).trim();
+    if (voiceEngine === "voicestudio") {
+      const validBuiltin = BUILTIN_VOICESTUDIO_MAP.has(voiceId);
+      const validCustom = validBuiltin ? null : await getCustomVoice(db, voiceId);
+      if (!validBuiltin && !validCustom) {
+        return jsonResp({ error: "Choose a valid VoiceStudio narrator." }, 400);
+      }
+      if (validCustom?.kind === "cloned" && !validCustom.slots?.base) {
+        return jsonResp({ error: "This cloned voice has no base audio clip." }, 400);
+      }
+    }
+    if (voiceEngine === "edge" && !/^[a-z]{2,3}-[A-Z]{2}-[A-Za-z0-9]+Neural$/.test(voiceId)) {
+      return jsonResp({ error: "Choose an Edge TTS narrator." }, 400);
+    }
     const voiceSpeed = String(body.voice_speed || "+37%");
     const targetWpm = Number(body.target_wpm) || 250;
 
@@ -1369,7 +1812,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         ts: nowIso,
         level: "info",
         stage: "queued",
-        message: `Task queued (publish mode: ${publishMode}, voice: ${voiceId}, bg: ${bgClip || bgMode}). Dispatching GitHub Actions...`,
+        message: `Task queued (publish mode: ${publishMode}, Voice: ${voiceEngine === "voicestudio" ? "VoiceStudio" : "Edge TTS"} / ${voiceId}, bg: ${bgClip || bgMode}). Dispatching GitHub Actions...`,
         progress_pct: 0,
       },
     ]);
@@ -1384,6 +1827,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           ref: "main",
           inputs: {
             job_id: jobId,
+            voice_engine: voiceEngine,
             test_background: body.test_background === true ? "true" : "false",
           },
         }),
@@ -1414,7 +1858,18 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const full = await getTaskFull(db, id);
     if (!full) return jsonResp({ error: "Task not found" }, 404);
     const { production_json: _omitted, ...summary } = full.task;
-    return jsonResp({ job: { ...summary, parts: full.parts, publish_targets: full.targets } });
+    let vc: any = {};
+    try { vc = JSON.parse(await getRuntimeState(db, undefined, `task_voice:${id}`, "{}")); } catch {}
+    const inferredEngine = String(summary.voice_id || "").startsWith("vs") ? "voicestudio" : "edge";
+    return jsonResp({
+      job: {
+        ...summary,
+        voice_engine: vc.voice_engine || inferredEngine,
+        voicestudio_speedup: vc.voicestudio_speedup ?? null,
+        parts: full.parts,
+        publish_targets: full.targets,
+      },
+    });
   }
 
   if ((path === "/api/jobs" || path === "/api/tasks") && request.method === "GET") {
@@ -1431,7 +1886,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       const vc = voiceMap.get(t.task_id);
       return {
         ...t,
-        voice_engine: vc?.voice_engine || (String(t.voice_id || "").startsWith("vs-") ? "voicestudio" : "edge"),
+        voice_engine: vc?.voice_engine || (String(t.voice_id || "").startsWith("vs") ? "voicestudio" : "edge"),
         voicestudio_speedup: vc?.voicestudio_speedup ?? null,
       };
     });

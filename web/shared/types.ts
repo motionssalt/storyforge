@@ -16,6 +16,7 @@ export interface AppSettings {
   voicestudio_voice_id: string;
   voice_engine: "edge" | "voicestudio";
   voicestudio_speedup: number;
+  sample_text: string;
   default_background: string; // "sequential" or clip filename
   queue_cadence_count: number;
   queue_cadence_unit: CadenceUnit;
@@ -24,11 +25,15 @@ export interface AppSettings {
   mock_mode: boolean;
 }
 
+export const DEFAULT_SAMPLE_TEXT =
+  "I found the spare key taped inside the kitchen vent, right behind a stack of old takeout menus. For three weeks everyone swore nobody had been in that apartment, until I checked the hallway camera and saw the door open.";
+
 export const DEFAULT_SETTINGS: AppSettings = {
   default_voice_id: "en-US-AndrewMultilingualNeural",
   voicestudio_voice_id: "vs-harper",
-  voice_engine: "edge",
+  voice_engine: "voicestudio",
   voicestudio_speedup: 1.25,
+  sample_text: DEFAULT_SAMPLE_TEXT,
   default_background: "sequential",
   queue_cadence_count: 3,
   queue_cadence_unit: "day",
@@ -64,7 +69,7 @@ export interface ZernioAccountRow {
 
 export interface TaskRow {
   task_id: string;
-  kind: "render" | "bg_import";
+  kind: "render" | "bg_import" | "voice_sample";
   series_title: string | null;
   format: string | null;
   status: string;

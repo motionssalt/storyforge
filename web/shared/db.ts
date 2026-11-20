@@ -1,5 +1,6 @@
 import {
   AppSettings,
+  DEFAULT_SAMPLE_TEXT,
   DEFAULT_SETTINGS,
   PublishTargetRow,
   TaskLogRow,
@@ -14,9 +15,10 @@ export async function getSettings(db: D1Database): Promise<AppSettings> {
   const map: Record<string, string> = {};
   for (const r of results || []) map[r.key] = r.value;
   return {
-    voice_engine: map.voice_engine === "voicestudio" ? "voicestudio" : "edge",
+    voice_engine: map.voice_engine === "edge" ? "edge" : "voicestudio",
     voicestudio_voice_id: map.voicestudio_voice_id || DEFAULT_SETTINGS.voicestudio_voice_id,
     voicestudio_speedup: Math.max(1, Math.min(2, Number(map.voicestudio_speedup) || 1.25)),
+    sample_text: (map.sample_text || "").trim() || DEFAULT_SAMPLE_TEXT,
     default_voice_id: map.default_voice_id || DEFAULT_SETTINGS.default_voice_id,
     default_background: map.default_background || DEFAULT_SETTINGS.default_background,
     queue_cadence_count: Math.max(1, Math.min(100, Number(map.queue_cadence_count) || DEFAULT_SETTINGS.queue_cadence_count)),
@@ -33,6 +35,7 @@ export async function saveSettings(db: D1Database, patch: Partial<AppSettings>):
   if (patch.voice_engine !== undefined) entries.push(["voice_engine", patch.voice_engine]);
   if (patch.voicestudio_voice_id !== undefined) entries.push(["voicestudio_voice_id", patch.voicestudio_voice_id]);
   if (patch.voicestudio_speedup !== undefined) entries.push(["voicestudio_speedup", String(patch.voicestudio_speedup)]);
+  if (patch.sample_text !== undefined) entries.push(["sample_text", String(patch.sample_text).trim() || DEFAULT_SAMPLE_TEXT]);
   if (patch.default_voice_id !== undefined) entries.push(["default_voice_id", String(patch.default_voice_id)]);
   if (patch.default_background !== undefined) entries.push(["default_background", String(patch.default_background)]);
   if (patch.queue_cadence_count !== undefined) entries.push(["queue_cadence_count", String(Math.max(1, Math.min(100, Math.round(Number(patch.queue_cadence_count) || 3))))]);
@@ -202,4 +205,66 @@ export async function listZernioKeys(db: D1Database): Promise<ZernioKeyRow[]> {
 export async function listZernioAccounts(db: D1Database): Promise<ZernioAccountRow[]> {
   const { results } = await db.prepare("SELECT * FROM zernio_accounts WHERE is_active = 1 ORDER BY platform ASC, account_name ASC").all<ZernioAccountRow>();
   return results || [];
+}
+
+
+export interface ClonedSlotMeta {
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  ref_text: string;
+  auto_transcribed?: boolean;
+  prompt_cached?: boolean;
+  preview_ready?: boolean;
+  updated_at: string;
+}
+
+export interface CustomVoiceRecord {
+  id: string;
+  kind: "designed" | "cloned";
+  engine: "voicestudio";
+  name: string;
+  descriptor: string;
+  instruct?: string;
+  seed?: number;
+  sample_ready?: boolean;
+  is_my_voice?: boolean;
+  slots?: Record<string, ClonedSlotMeta>;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function listCustomVoices(db: D1Database): Promise<CustomVoiceRecord[]> {
+  const { results } = await db
+    .prepare("SELECT key, value FROM runtime_state WHERE key LIKE 'custom_voice:%' ORDER BY updated_at ASC")
+    .all<{ key: string; value: string }>();
+  const out: CustomVoiceRecord[] = [];
+  for (const r of results || []) {
+    try {
+      const parsed = JSON.parse(r.value);
+      if (parsed && parsed.id) out.push(parsed);
+    } catch {
+      /* ignore malformed entry */
+    }
+  }
+  return out;
+}
+
+export async function getCustomVoice(db: D1Database, voiceId: string): Promise<CustomVoiceRecord | null> {
+  if (!voiceId) return null;
+  const raw = await getRuntimeState(db, undefined, `custom_voice:${voiceId}`, "");
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+export async function saveCustomVoice(db: D1Database, voice: CustomVoiceRecord): Promise<void> {
+  await setRuntimeState(db, `custom_voice:${voice.id}`, JSON.stringify(voice));
+}
+
+export async function deleteCustomVoice(db: D1Database, voiceId: string): Promise<void> {
+  await deleteRuntimeState(db, `custom_voice:${voiceId}`);
 }
