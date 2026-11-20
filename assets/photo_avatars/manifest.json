@@ -144,17 +144,8 @@
     "file": "photo_object-watch-4bcee68c.jpg"
   },
   {
-    "style": "photo_object",
-    "hint": "watch",
-    "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/05/Hand_watch_clock_face.jpg/330px-Hand_watch_clock_face.jpg",
-    "url": "https://upload.wikimedia.org/wikipedia/commons/0/05/Hand_watch_clock_face.jpg",
-    "page": "https://commons.wikimedia.org/wiki/File:Hand_watch_clock_face.jpg",
-    "license": "CC0",
-    "file": "photo_object-watch-d5594663.jpg"
-  },
-  {
     "style": "photo_person",
-    "hint": "any",
+    "hint": "male",
     "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/de/GAN_Mensch_StyleGAN2.png/330px-GAN_Mensch_StyleGAN2.png",
     "url": "https://upload.wikimedia.org/wikipedia/commons/d/de/GAN_Mensch_StyleGAN2.png",
     "page": "https://commons.wikimedia.org/wiki/File:GAN_Mensch_StyleGAN2.png",
@@ -163,30 +154,12 @@
   },
   {
     "style": "photo_person",
-    "hint": "any",
-    "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bf/Computer-generated_human_face_illustrating_the_glabella.jpg/330px-Computer-generated_human_face_illustrating_the_glabella.jpg",
-    "url": "https://upload.wikimedia.org/wikipedia/commons/b/bf/Computer-generated_human_face_illustrating_the_glabella.jpg",
-    "page": "https://commons.wikimedia.org/wiki/File:Computer-generated_human_face_illustrating_the_glabella.jpg",
-    "license": "CC0",
-    "file": "photo_person-any-4b2f31a1.jpg"
-  },
-  {
-    "style": "photo_person",
-    "hint": "any",
+    "hint": "female",
     "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1c/This_Person_Does_Not_Exist_example.jpg/330px-This_Person_Does_Not_Exist_example.jpg",
     "url": "https://upload.wikimedia.org/wikipedia/commons/1/1c/This_Person_Does_Not_Exist_example.jpg",
     "page": "https://commons.wikimedia.org/wiki/File:This_Person_Does_Not_Exist_example.jpg",
     "license": "Public domain",
     "file": "photo_person-any-a72687ff.jpg"
-  },
-  {
-    "style": "photo_person",
-    "hint": "any",
-    "thumb": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ea/This_AI-generated_woman_does_not_exist.png/330px-This_AI-generated_woman_does_not_exist.png",
-    "url": "https://upload.wikimedia.org/wikipedia/commons/e/ea/This_AI-generated_woman_does_not_exist.png",
-    "page": "https://commons.wikimedia.org/wiki/File:This_AI-generated_woman_does_not_exist.png",
-    "license": "Public domain",
-    "file": "photo_person-any-b55ddc51.jpg"
   },
   {
     "style": "photo_scenery",

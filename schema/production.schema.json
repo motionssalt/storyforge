@@ -312,5 +312,30 @@
         }
       ]
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "format": {
+            "const": "single"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "parts": {
+            "maxItems": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "parts": {
+            "minItems": 2
+          }
+        }
+      }
+    }
+  ]
 }

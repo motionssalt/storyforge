@@ -12,7 +12,7 @@ on:
         description: 'Optional repo fixture for CI smoke; uploads diagnostics only (no publishing)'
         type: choice
         default: 'none'
-        options: [none, edge_single, edge_two_part, voicestudio_two_part]
+        options: [none, edge_single, edge_two_part, voicestudio_two_part, voicestudio_long]
       test_background:
         description: "Use procedural test background (ONLY when backgrounds release is empty for smoke testing)"
         required: false
@@ -20,7 +20,7 @@ on:
         type: string
 
 concurrency:
-  group: storyforge-render
+  group: storyforge-render-${{ inputs.smoke_fixture || 'none' }}
   cancel-in-progress: false
 
 permissions:
@@ -53,7 +53,7 @@ jobs:
           WORKER_URL: ${{ secrets.WORKER_URL }}
           WORKER_INTERNAL_SECRET: ${{ secrets.WORKER_INTERNAL_SECRET }}
         run: |
-          if [[ "$FIXTURE" == voicestudio_two_part ]]; then
+          if [[ "$FIXTURE" == voicestudio_* ]]; then
             echo 'omni=true' >> "$GITHUB_OUTPUT"
           elif [[ "$FIXTURE" == none ]]; then
             CONFIG=$(curl --fail --silent --show-error --max-time 20 -G --data-urlencode "id=$JOB_ID" -H "X-Internal-Secret: $WORKER_INTERNAL_SECRET" -A StoryForge-Runner "$WORKER_URL/api/internal/job")
@@ -109,6 +109,7 @@ jobs:
             edge_single) python pipeline/run_job.py --local-json schema/examples/single-video.json ;;
             edge_two_part) python pipeline/run_job.py --local-json schema/examples/smoke-two-part.json ;;
             voicestudio_two_part) python pipeline/run_job.py --local-json schema/examples/smoke-two-part.json --engine voicestudio --voice vs-harper ;;
+            voicestudio_long) python pipeline/run_job.py --local-json schema/examples/two-part-series.json --engine voicestudio --voice vs-harper ;;
             none) python pipeline/run_job.py ;;
           esac
 
