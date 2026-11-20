@@ -278,9 +278,116 @@
   });
 
   // --- Voices ---
+  let activePlayKey = null;
+
+  const players = Array.from(document.querySelectorAll("[data-narration]")).map((wrap) => {
+    const scope = wrap.dataset.narration;
+    const select = scope === "settings" ? setDefaultVoice : voiceSelect;
+    wrap.innerHTML = `<div class="voice-list" data-voice-list="${scope}"></div><div class="muted" role="status" style="margin-top:4px;"></div><audio class="hidden" controls preload="none" aria-label="Narration sample"></audio>`;
+    const listEl = wrap.querySelector(".voice-list");
+    const audio = wrap.querySelector("audio");
+    const status = wrap.querySelector('[role="status"]');
+    audio.addEventListener("ended", () => {
+      activePlayKey = null;
+      updatePlayButtons();
+    });
+    audio.addEventListener("error", () => {
+      if (audio.hasAttribute("src")) {
+        activePlayKey = null;
+        updatePlayButtons();
+        status.textContent = "Couldn't load this narration sample.";
+      }
+    });
+    return { scope, select, listEl, audio, status };
+  });
+
+  function updatePlayButtons() {
+    for (const p of players) {
+      p.listEl.querySelectorAll("[data-play-voice]").forEach((btn) => {
+        const key = `${p.scope}:${btn.dataset.playVoice}:${btn.dataset.sample}`;
+        const defaultLabel = btn.dataset.defaultLabel || "Play";
+        btn.textContent = activePlayKey === key ? "Stop" : defaultLabel;
+      });
+    }
+  }
+
+  function renderVoiceList(select, list) {
+    const player = players.find((p) => p.select === select);
+    if (!player) return;
+    const radioName = `voice_pick_${player.scope}`;
+    const currentId = select.value;
+    player.listEl.innerHTML = list.map((v) => {
+      const checked = v.id === currentId;
+      const emoLabel = v.engine === "voicestudio" ? "Play whisper" : "Play dramatic";
+      const emoBtn = v.sample_emotional
+        ? `<button class="secondary" type="button" data-play-voice="${escapeHtml(v.id)}" data-sample="emotional" data-default-label="${emoLabel}">${emoLabel}</button>`
+        : "";
+      return `
+        <div class="voice-row${checked ? " selected" : ""}" data-voice-row="${escapeHtml(v.id)}">
+          <label class="voice-pick">
+            <input type="radio" name="${radioName}" value="${escapeHtml(v.id)}"${checked ? " checked" : ""} />
+            <span>
+              <strong>${escapeHtml(v.name)}</strong>
+              ${checked ? '<span class="badge">Selected</span>' : ""}
+              <span class="muted" style="display:block;">${escapeHtml(v.descriptor || v.gender || "")}</span>
+            </span>
+          </label>
+          <div class="row" style="margin-top:0;">
+            <button class="secondary" type="button" data-play-voice="${escapeHtml(v.id)}" data-sample="neutral" data-default-label="Play">Play</button>
+            ${emoBtn}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    player.listEl.querySelectorAll(`input[name="${radioName}"]`).forEach((radio) => {
+      radio.addEventListener("change", () => {
+        if (!radio.checked) return;
+        select.value = radio.value;
+        select.dispatchEvent(new Event("change"));
+        renderVoiceList(select, list);
+        updatePlayButtons();
+      });
+    });
+
+    player.listEl.querySelectorAll("[data-play-voice]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const vid = button.dataset.playVoice;
+        const kind = button.dataset.sample;
+        const key = `${player.scope}:${vid}:${kind}`;
+        if (activePlayKey === key) {
+          stopNarration();
+          return;
+        }
+        const voice = allVoices.find((v) => v.id === vid);
+        if (!voice) return;
+        stopNarration();
+        closeBackgroundPreview();
+        const src = voice["sample_" + kind];
+        if (!src) {
+          player.status.textContent = "This sample has not been published yet.";
+          return;
+        }
+        activePlayKey = key;
+        updatePlayButtons();
+        player.audio.src = src;
+        const kindLabel = kind === "neutral" ? "Sample" : (voice.engine === "voicestudio" ? "Whisper sample" : "Dramatic sample");
+        player.status.textContent = `${voice.name} · ${kindLabel}`;
+        player.audio.classList.remove("hidden");
+        player.audio.play().catch((err) => {
+          if (err.name !== "AbortError" && player.audio.getAttribute("src") === src && !player.audio.error) {
+            player.status.textContent = "Use the audio player's play button to start the sample.";
+          }
+        });
+      });
+    });
+    updatePlayButtons();
+  }
+
   function populateVoiceOptions(select, engine) {
     const list = allVoices.filter(v => v.engine === engine);
     select.innerHTML = list.map(v => '<option value="' + escapeHtml(v.id) + '">' + escapeHtml(v.name) + ' (' + escapeHtml(v.descriptor || v.gender) + ')</option>').join('');
+    renderVoiceList(select, list);
     return list;
   }
 
@@ -301,46 +408,16 @@
 
   function populateSettingsVoices() {
     stopNarration();
-    populateVoiceOptions(setDefaultVoice, setVoiceEngine.value);
+    const list = populateVoiceOptions(setDefaultVoice, setVoiceEngine.value);
     const saved = setVoiceEngine.value === 'voicestudio' ? settings.voicestudio_voice_id : settings.default_voice_id;
     if (Array.from(setDefaultVoice.options).some(option => option.value === saved)) setDefaultVoice.value = saved;
+    renderVoiceList(setDefaultVoice, list);
     engineStatus.textContent = setVoiceEngine.value === 'edge' ? 'Edge TTS ready.' : hasVoiceStudioSamples ? 'VoiceStudio samples ready. A cold runner downloads the model.' : 'VoiceStudio samples not published yet. First run downloads the model.';
   }
   setVoiceEngine.addEventListener('change', populateSettingsVoices);
 
-  const players = Array.from(document.querySelectorAll("[data-narration]")).map((wrap) => {
-    const select = wrap.dataset.narration === "settings" ? setDefaultVoice : voiceSelect;
-    wrap.innerHTML = `<div class="row">
-      <button class="secondary" type="button" data-sample="neutral">Play neutral</button>
-      <button class="secondary" type="button" data-sample="emotional">Play dramatic</button>
-    </div><div class="muted" role="status"></div><audio class="hidden" controls preload="none" aria-label="Narration sample"></audio>`;
-    const audio = wrap.querySelector("audio");
-    const status = wrap.querySelector('[role="status"]');
-    select.addEventListener("change", () => stopNarration());
-    audio.addEventListener("error", () => {
-      if (audio.hasAttribute("src")) status.textContent = "Couldn't load this narration sample.";
-    });
-    wrap.querySelectorAll("[data-sample]").forEach((button) => button.addEventListener("click", () => {
-      const voice = allVoices.find((v) => v.id === select.value);
-      if (!voice) { status.textContent = "Choose a narrator first."; return; }
-      stopNarration();
-      closeBackgroundPreview();
-      const kind = button.dataset.sample;
-      const src = voice['sample_' + kind];
-      if (!src) { status.textContent = 'This sample has not been published yet.'; return; }
-      audio.src = src;
-      status.textContent = `${voice.name} · ${kind === "neutral" ? "Neutral" : "Dramatic"} sample`;
-      audio.classList.remove("hidden");
-      audio.play().catch((err) => {
-        if (err.name !== "AbortError" && audio.getAttribute("src") === src && !audio.error) {
-          status.textContent = "Use the audio player's play button to start the sample.";
-        }
-      });
-    }));
-    return { audio, status };
-  });
-
   function stopNarration() {
+    activePlayKey = null;
     for (const { audio, status } of players) {
       if (!audio.hasAttribute("src")) continue;
       audio.pause();
@@ -349,6 +426,7 @@
       hideEl(audio);
       status.textContent = "";
     }
+    updatePlayButtons();
   }
 
   voiceSelect.addEventListener("change", () => {
@@ -388,6 +466,7 @@
     const saved = engine === 'voicestudio' ? settings.voicestudio_voice_id : settings.default_voice_id;
     if (!voiceOverridden || !voices.some(v => v.id === selectedVoiceId)) selectedVoiceId = voices.some(v => v.id === saved) ? saved : voices[0]?.id;
     voiceSelect.value = selectedVoiceId;
+    renderVoiceList(voiceSelect, voices);
     updateCalibratedRate();
     if (!bgOverridden) {
       const defBg = settings.default_background || "sequential";
@@ -1226,7 +1305,7 @@
             <span class="${badgeCls}">${escapeHtml(j.status)}</span>
           </div>
           <div class="row" style="margin-top:0;">
-            ${j.status === 'failed' && j.voice_id?.startsWith('vs-') ? '<button type="button" class="secondary retry-edge-btn" data-id="' + escapeHtml(j.task_id) + '">Re-run with Edge TTS</button>' : ''}
+            ${j.status === 'failed' && (j.voice_engine === 'voicestudio' || j.voice_id?.startsWith('vs-')) ? '<button type="button" class="secondary retry-edge-btn" data-id="' + escapeHtml(j.task_id) + '">Re-run with Edge TTS</button>' : ''}
             ${retryBtn}
             <button type="button" class="secondary toggle-logs-btn" data-id="${escapeHtml(j.task_id)}">${logsOpen ? "Hide logs" : "Show logs"}</button>
             ${deleteBtn}
@@ -1234,7 +1313,7 @@
         </div>
         <div class="muted" style="margin-top:4px;">
           Task: <span class="mono">${escapeHtml(j.task_id)}</span>
-          ${j.voice_id ? ` | Voice: ${escapeHtml(j.voice_id)} (${escapeHtml(j.voice_speed || "")})` : ""}
+          ${j.voice_id ? ` | Voice: ${escapeHtml(j.voice_id)} (${j.voice_engine === "voicestudio" ? `VoiceStudio ${escapeHtml(String(j.voicestudio_speedup ?? 1.25))}x` : `Edge ${escapeHtml(j.voice_speed || "")}`})` : ""}
           ${modeBits.length ? ` | ${escapeHtml(modeBits.join(" · "))}` : ""}
           | Created: ${escapeHtml(fmtLagosTime(j.created_at))}
         </div>

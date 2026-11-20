@@ -205,7 +205,8 @@ def render_all_parts(
         os.makedirs(part_dir, exist_ok=True)
 
         # 1. TTS + Word timings (0..18% of part span)
-        emit("tts", f"{part_tag}: Synthesizing narration ({voice_id}, rate {voice_speed})...", part_base + part_span * 0.02)
+        tts_detail = f"VoiceStudio {coupled_speedup_factor or 1.25:.2f}x" if tts_engine_name == "voicestudio" else f"Edge rate {voice_speed}"
+        emit("tts", f"{part_tag}: Synthesizing narration ({voice_id}, {tts_detail})...", part_base + part_span * 0.02)
         tts_res = engine.synthesize_lines(
             part["lines"],
             voice_id=voice_id,

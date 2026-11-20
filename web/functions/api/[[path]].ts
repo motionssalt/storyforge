@@ -1418,11 +1418,24 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   }
 
   if ((path === "/api/jobs" || path === "/api/tasks") && request.method === "GET") {
-    const [tasks, bgIdx] = await Promise.all([
+    const [tasks, bgIdx, voiceRows] = await Promise.all([
       listTasksFull(db, 30),
       getRuntimeState(db, env.STORYFORGE_VAULT, "bg_index", "0"),
+      db.prepare("SELECT key, value FROM runtime_state WHERE key LIKE 'task_voice:%'").all<{ key: string; value: string }>(),
     ]);
-    return jsonResp({ jobs: tasks, tasks, next_background_index: Number(bgIdx) || 0 });
+    const voiceMap = new Map<string, any>();
+    for (const r of voiceRows.results || []) {
+      try { voiceMap.set(r.key.slice("task_voice:".length), JSON.parse(r.value)); } catch {}
+    }
+    const enriched = tasks.map((t: any) => {
+      const vc = voiceMap.get(t.task_id);
+      return {
+        ...t,
+        voice_engine: vc?.voice_engine || (String(t.voice_id || "").startsWith("vs-") ? "voicestudio" : "edge"),
+        voicestudio_speedup: vc?.voicestudio_speedup ?? null,
+      };
+    });
+    return jsonResp({ jobs: enriched, tasks: enriched, next_background_index: Number(bgIdx) || 0 });
   }
 
   if (path === "/api/task-logs" && request.method === "GET") {
