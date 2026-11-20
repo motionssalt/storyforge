@@ -207,8 +207,6 @@ class TestAudioChecks(unittest.TestCase):
             self.assertRegex(str(ctx.exception), r"1\.\d\ds-2\.\d\ds")
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
 
 
 try:
@@ -315,3 +313,6 @@ class TestVoiceStudioFaultInjection(unittest.TestCase):
                 res.intended_pauses,
                 max_gap_sec=1.5,
             )
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

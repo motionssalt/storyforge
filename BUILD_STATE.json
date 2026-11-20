@@ -429,8 +429,8 @@
     ]
   },
   "round6": {
-    "status": "in_progress",
-    "updated_at": "2026-11-20T16:32:27Z",
+    "status": "complete",
+    "updated_at": "2026-11-20T18:07:17Z",
     "inspected_user_render": {
       "job_id": "sf_mwp1r544_c31aa8",
       "run_id": 44749389489,
@@ -452,6 +452,31 @@
       "Use pure-Python stdlib in audio_checks.py (with numpy fast-path when available) so verification runs both in minimal containers and GitHub Actions runners."
     ],
     "blockers": [],
-    "next_action": "Trigger live GitHub Actions render (voicestudio_single) and verify full video subtitles and voice waveform."
+    "next_action": "Round 6 complete.",
+    "verified_runs": {
+      "voicestudio_single": {
+        "run_id": 44774461652,
+        "url": "https://github.com/motionssalt/storyforge/actions/runs/44774461652",
+        "conclusion": "success",
+        "voice": "VoiceStudio / vs-harper (1.25x)",
+        "chunks": 21,
+        "retries": 0,
+        "words": 405,
+        "realigned": 0,
+        "even_fallback": 0,
+        "max_unintended_gap_sec": 0.74,
+        "duration_sec": 104.39,
+        "speech_ac_db": -23.4,
+        "min_speech_window_db": -30.2,
+        "max_abs_dc": 0.00019,
+        "ass_highlighted_words": 405,
+        "ass_mismatches": 0
+      },
+      "voice_samples_regen": {
+        "run_id": 44774436370,
+        "url": "https://github.com/motionssalt/storyforge/actions/runs/44774436370",
+        "conclusion": "success"
+      }
+    }
   }
 }
