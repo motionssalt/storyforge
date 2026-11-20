@@ -41,7 +41,7 @@
     "SF-003: Implemented single-pass tall-body Chromium rendering (card_shell.png + body_dim.png + body_bright.png) paired with Pillow bilinear affine scrolling synced monotonically to Whisper/Edge word timestamps via compute_scroll_curve and piped as raw rgb24 overlay frames into FFmpeg.",
     "SF-001: Rewrote vault:agent_prompt in KV to request a single fenced ```json code block with nothing before/after, plain-words field guide plus one concrete v2 example (The Numbered Parcel Slip), zero formal JSON Schema, and anti-escape rules; added client + Worker deterministic repair (fence strip, outer brace trim, markdown backslash unescaping) and schema-echo error detection.",
     "SF-002: Seeded DiceBear v9 avataaars PNG resolution by canonicalized username (cached per job in avatars_cache/) with non-emoji bundled fallback and img.complete/naturalWidth/img.decode() readiness guard so avatars look like cartoon characters and stay identical across every part of a series.",
-    "SF-011: Root cause was placeholder mismatch — vault:agent_prompt in KV uses {{IDEA}} and {{TARGET_WORDS_90S}}, while /api/prompt only replaced {{STORY_IDEA}} and {{TARGET_WPM}} using raw String.replace (which also mangles $&/$1). Added web/shared/prompt.ts with function replacers supporting {{IDEA}}/{{STORY_IDEA}}, {{TARGET_WPM}}, and {{TARGET_WORDS_90S}}, strict error when no idea marker exists, and exact text preservation.",
+    "SF-011: Root cause was placeholder mismatch \u2014 vault:agent_prompt in KV uses {{IDEA}} and {{TARGET_WORDS_90S}}, while /api/prompt only replaced {{STORY_IDEA}} and {{TARGET_WPM}} using raw String.replace (which also mangles $&/$1). Added web/shared/prompt.ts with function replacers supporting {{IDEA}}/{{STORY_IDEA}}, {{TARGET_WPM}}, and {{TARGET_WORDS_90S}}, strict error when no idea marker exists, and exact text preservation.",
     "SF-009: Root cause was #stage padding-bottom: 60px in pipeline/render_cards.py clipping the 0 28px 64px box-shadow (alpha was still 23/255 at the 60px cut line in dark theme). Increased #stage padding to 80px 110px 160px 110px (and legacy template to 80px 135px 160px 135px) and shifted default stage_screen_y from 65 to 35 so the card stays at y=115px while all four outer edges fade cleanly to alpha 0.",
     "SF-010: Added state-aware Delete button and plain in-page confirmation modal on every task card, backed by POST /api/tasks/delete (and DELETE /api/tasks). Uses D1 runtime_state tombstones (deleted_task:<id>) to guarantee non-resurrection against late workflow/log/status callbacks and cron ticks, cancels active GitHub Actions runs via stored task_run:<id> or workflow run-name matching, cancels not-yet-live Zernio posts via DELETE /v1/posts/{id} while reporting already-live posts, deletes renders Release assets by ID/filename/prefix without ever touching shared resources, and preserves delete_failed status for idempotent retry on partial failure."
   ],
@@ -168,7 +168,7 @@
   },
   "round4": {
     "status": "partially complete",
-    "updated_at": "2026-11-20T10:17:23.006Z",
+    "updated_at": "2026-11-20T10:48:30Z",
     "A": {
       "status": "implemented and verified locally; production KV unchanged",
       "cause": "Existing BUILD_STATE records that SF-001 replaced a schema with plain guidance plus a single concrete example. That is a plausible single-format anchor, not proven causality: direct production template read returned 401 and no independent AI-output distribution was measured.",
@@ -190,7 +190,7 @@
       "verification": "All five styles visually verified in both themes in local Chromium. Two-part Actions frames retained matching avatar across themes. Wikimedia thumbnail/original hosts are not independent providers, and candidate-provider comparisons were not systematically exercised on Actions."
     },
     "D": {
-      "status": "CPU integration, samples release and short Actions renders verified; long benchmark pending",
+      "status": "CPU integration, samples release, short + long Actions renders, and warm-cache restore verified",
       "snapshot_bytes": 3267465820,
       "actions_cache_bytes": 2865808620,
       "short_cpu": {
@@ -227,7 +227,41 @@
         "long": "https://github.com/motionssalt/storyforge/actions/runs/44717016818",
         "warm_cache": "https://github.com/motionssalt/storyforge/actions/runs/44716711261"
       },
-      "voice_samples_release": "https://github.com/motionssalt/storyforge/releases/tag/voice-samples"
+      "voice_samples_release": "https://github.com/motionssalt/storyforge/releases/tag/voice-samples",
+      "long_cpu": {
+        "run": "https://github.com/motionssalt/storyforge/actions/runs/44717016818",
+        "wall_seconds": 1876,
+        "snapshot_seconds": 12.19,
+        "load_seconds": 1.61,
+        "generation_seconds": [
+          759.37,
+          759.12
+        ],
+        "alignment_seconds": [
+          10.2,
+          8.19
+        ],
+        "finished_mp4_seconds": [
+          76.176,
+          78.024
+        ],
+        "words": [
+          307,
+          296
+        ],
+        "target_seconds_at_250_wpm": [
+          73.68,
+          71.04
+        ]
+      },
+      "warm_cache": {
+        "run": "https://github.com/motionssalt/storyforge/actions/runs/44716711261",
+        "cache_hit": true,
+        "cache_key": "storyforge-omni-3fc979d1-hub-v1",
+        "cache_restore_seconds": 18.5,
+        "snapshot_seconds": 0.2,
+        "load_seconds": 1.65
+      }
     },
     "deployment": {
       "github": "pushed to main; Actions workflows active and voice-samples release published",
@@ -243,8 +277,7 @@
     ],
     "blockers": [
       "CLOUDFLARE_API_TOKEN rejected; obtain a valid token via a secure channel with account KV, Pages and Worker deployment permissions.",
-      "OmniVoice CC BY-NC weights do not provide commercial permission.",
-      "As of update, long runner timings and cache restore logs not yet confirmed."
+      "OmniVoice CC BY-NC weights do not provide commercial permission."
     ],
     "next_action": "Use a valid Cloudflare token to read the production KV prompt first; compare it to the private staged Round 4 draft, preserve any additional current instructions, and write vault:agent_prompt. Deploy web/ to the Pages project serving storyforge-sfb.pages.dev and redeploy cron-worker/ if desired. Authenticate to live Pages and verify sample streaming, format+validation, queue/render and cancellation. Collect long and warm-cache runner logs and update this state; verify actual Auto chat outputs before claiming format distribution."
   }
