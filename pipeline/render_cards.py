@@ -13,6 +13,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import io
 import math
 import os
 import re
@@ -61,6 +62,7 @@ def resolve_avatar_data_uri(
     username: str | None,
     cache_dir: str | None,
     avatars_dir: str,
+    avatar: dict[str, Any] | None = None,
 ) -> str:
     """
     Resolve a deterministic cartoon profile picture for `username`:
@@ -80,6 +82,44 @@ def resolve_avatar_data_uri(
             return f"data:image/png;base64,{base64.b64encode(raw).decode('ascii')}"
     else:
         cache_path = None
+
+    def remember(data: bytes) -> str:
+        if cache_path:
+            with open(cache_path, "wb") as f:
+                f.write(data)
+        return "data:image/png;base64," + base64.b64encode(data).decode("ascii")
+
+    avatar = avatar or {}
+    style = avatar.get("style", "cartoon")
+    if style != "cartoon":
+        from PIL import Image, ImageOps
+        pool_dir = os.path.join(os.path.dirname(avatars_dir), "photo_avatars")
+        try:
+            with open(os.path.join(pool_dir, "manifest.json"), encoding="utf-8") as f:
+                rows = [row for row in json.load(f) if row["style"] == style]
+            hint = str(avatar.get("keyword", "")).lower().strip() if style != "photo_person" else avatar.get("gender")
+            hinted = [row for row in rows if row["hint"] == hint]
+            rows = hinted or rows
+            row = rows[int(digest, 16) % len(rows)]
+            # Pin the asset, not merely the source. A provider outage must not change the poster.
+            for source in [row["thumb"], row["url"], os.path.join(pool_dir, row["file"])]:
+                try:
+                    if source.startswith(("https://thumb.wikimedia.org/", "https://upload.wikimedia.org/")):
+                        req = urllib.request.Request(source, headers={"User-Agent": "StoryForge-Renderer/4.0 (github.com/motionssalt/storyforge)"})
+                        with urllib.request.urlopen(req, timeout=4) as response:
+                            data = response.read(12_000_001)
+                        if len(data) > 12_000_000:
+                            continue
+                        source = io.BytesIO(data)
+                    with Image.open(source) as img:
+                        out = io.BytesIO()
+                        ImageOps.fit(img.convert("RGB"), (256, 256)).save(out, "PNG")
+                        return remember(out.getvalue())
+                except (OSError, ValueError, Image.DecompressionBombError):
+                    continue
+        except (OSError, KeyError, ValueError, IndexError):
+            pass
+        print("[avatar] No usable curated photo; using cartoon fallback.")
 
     url = (
         "https://api.dicebear.com/9.x/avataaars/png"
@@ -985,6 +1025,7 @@ def render_scrolling_post_assets(
         post.get("username"),
         cache_dir=avatar_cache_dir,
         avatars_dir=avatars_dir,
+        avatar=post.get("avatar"),
     )
 
     post_payload = dict(post)

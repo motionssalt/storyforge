@@ -1,7 +1,7 @@
 {
   "project": "storyforge",
-  "phase": "Round 4 A+B implementation",
-  "updated_at": "2026-11-20T10:01:52.565Z",
+  "phase": "Round 4 C implementation",
+  "updated_at": "2026-11-20T10:04:44.754Z",
   "phases": {
     "1_vault_migration_and_repo_sanitization": "done",
     "2_schema_and_agent_prompt": "done",
@@ -169,7 +169,7 @@
   "round4": {
     "A": "Format control and safe placeholder substitution implemented; vault authentication and production tests pending.",
     "B": "V3 and shared Worker/runner compatibility normalizer implemented; render verification pending.",
-    "C": "pending",
+    "C": "32 reviewed-source CC0/public-domain photo candidates and category resolver implemented. Runner and visual checks pending; alternate endpoints are both Wikimedia.",
     "D": "pending",
     "decisions": [
       "Do not touch host-frontend/. No UI restyling.",
@@ -178,6 +178,6 @@
     "blockers": [
       "Vault endpoint returned HTTP 401; confirm direct account-token access before updating private template."
     ],
-    "next_action": "Verify/push A+B, recover KV access, then implement stable photo avatar sources."
+    "next_action": "Verify photo/card rendering and implement CPU OmniVoice and samples workflow."
   }
 }

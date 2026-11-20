@@ -23,7 +23,7 @@ from background import (
 )
 from compose import compose_scrolling_video, compress_final_video, probe_video_stats
 from progress import TaskReporter
-from render_cards import render_scrolling_post_assets
+from render_cards import render_scrolling_post_assets, resolve_avatar_data_uri
 from subtitles import generate_ass_subtitles
 from tts_engine import VoiceStudioCoupledSpeedupHook, get_tts_engine
 
@@ -165,6 +165,8 @@ def render_all_parts(
     avatar_cache_dir = os.path.join(work_dir, "avatars_cache")
     fonts_dir = os.path.join(root, "assets", "fonts")
     engine = get_tts_engine(tts_engine_name)
+    first_post = production_json["parts"][0]["post"]
+    resolve_avatar_data_uri(first_post["username"], avatar_cache_dir, avatars_dir, first_post["avatar"])
 
     manifest_clips: list[dict[str, Any]] = []
     if not local_bg and not test_background:

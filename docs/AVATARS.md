@@ -1,0 +1,9 @@
+# StoryForge photo avatars
+
+`assets/photo_avatars/manifest.json` records the file page, license, original and thumbnail URL for every bundled asset. The cropped collection contains 32 256px images: 4 explicitly synthetic public-domain portraits, 8 CC0 objects, 9 CC0 animals and 11 CC0 scenes. It contains no scraped private-person portraits. Before adding an image, confirm its actual file-page license, synthetic provenance for faces, and that the crop has no prominent brand/logo or watermark.
+
+The render hashes the canonical username and selects from the requested style, preferring a known hint when available. It fetches at startup from Wikimedia’s thumbnail CDN, then tries the same pinned image on the original upload host, then the bundled crop. The first two endpoints are independent hostnames, **not independent providers**. Selecting the same source image across those options avoids swapping identities during outages. The card receives a local data URI before Chromium measures it. Unusable photos fall back to DiceBear’s bundled cartoon path, then the letter circle. Hints outside the reviewed pool are best effort. `photo_person` uses synthetic images only; the small pool may not satisfy the optional gender hint.
+
+[Wikimedia Commons reuse guidance](https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia) · [CC0 terms](https://creativecommons.org/publicdomain/zero/1.0/)
+
+Picsum’s keyless fixed-ID endpoint responded in a local probe but its generic catalog can mix categories and people; it was not used. RandomUser and Pravatar were not adopted: their arbitrary portraits could be real individuals, and a use/redistribution grant for this specific use was not established. Public-domain synthetic source pages are pinned in the manifest rather than relying on an unseeded live face generator.
