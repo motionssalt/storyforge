@@ -1,6 +1,4 @@
 const IDEA_MARKER_RE = /\{\{(?:IDEA|STORY_IDEA)\}\}/g;
-const TARGET_WPM_RE = /\{\{TARGET_WPM\}\}/g;
-const TARGET_WORDS_90S_RE = /\{\{TARGET_WORDS_90S\}\}/g;
 
 export interface PromptRenderResult {
   ok: true;

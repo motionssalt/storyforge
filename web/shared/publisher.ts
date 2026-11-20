@@ -1189,6 +1189,7 @@ export async function deleteTaskById(env: Env, taskId: string): Promise<DeleteTa
     db.prepare("DELETE FROM task_parts WHERE task_id = ?").bind(taskId),
     db.prepare("DELETE FROM tasks WHERE task_id = ?").bind(taskId),
     db.prepare("DELETE FROM runtime_state WHERE key = ?").bind(`task_run:${taskId}`),
+    db.prepare("DELETE FROM runtime_state WHERE key = ?").bind(`task_voice:${taskId}`),
   ]);
 
   // 6. Keep queue cadence clean when a queued task is deleted

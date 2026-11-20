@@ -9,13 +9,11 @@ export function normalizeProduction(input) {
   const doc = JSON.parse(JSON.stringify(input));
   const notices = [], errors = [];
   const missingAvatar = doc.parts.map(part => !Object.hasOwn(part?.post ?? {}, 'avatar'));
-  const missingName = doc.parts.map(part => !handle(part?.post?.username));
   doc.parts.forEach((part, i) => {
     if (!object(part) || part.post || !Array.isArray(part.cards) || !part.cards.length) return;
     const c = part.cards.find(item => ['post', 'branded'].includes(item?.card?.type))?.card ?? part.cards[0]?.card ?? {};
     part.post = Object.fromEntries(Object.entries(c).filter(([key]) => ['subreddit','username','age','title','upvotes','comments','comments_count','shares','awards','flair','nsfw','verified','karma','follower_count','theme','avatar','show_footer'].includes(key)));
     part.post.username ??= c.handle;
-    missingName[i] = !handle(part.post.username);
     missingAvatar[i] = !Object.hasOwn(part.post, 'avatar');
     if (!part.description) {
       const desc = String(part.story_so_far || part.post.title || part.title || '').trim();
@@ -39,6 +37,13 @@ export function normalizeProduction(input) {
       delete p.comments_count;
       notices.push(`Part ${i + 1}: renamed comments_count to comments.`);
     }
+    if (legacy) {
+      const cleanCount = x => typeof x === 'string' ? x.trim().replace(/,/g, '').replace(/\+$/, '') : x;
+      for (const k of ['upvotes', 'comments', 'shares', 'karma', 'follower_count', 'awards']) {
+        if (Object.hasOwn(p, k)) p[k] = cleanCount(p[k]);
+      }
+      if (Array.isArray(p.awards)) p.awards = p.awards.map(x => object(x) && Object.hasOwn(x, 'count') ? {...x, count: cleanCount(x.count)} : x);
+    }
     const auto = [];
     const fill = (key, value) => {
       if (!Object.hasOwn(p, key) || p[key] === undefined) { p[key] = value; auto.push(key); }
@@ -51,7 +56,12 @@ export function normalizeProduction(input) {
     }
     const seed = handle(p.username) || storySeed;
     const roll = (key, min, max) => min + hash(`${seed}|${key}`) % (max - min + 1);
-    const votes = roll(`votes${i}`, 72, 15400);
+    const estimateCount = value => {
+      const m = String(value ?? '').toLowerCase().match(/^([0-9.]+)([kmb]?)$/);
+      return m ? Number(m[1]) * ({k:1e3,m:1e6,b:1e9}[m[2]] ?? 1) : NaN;
+    };
+    const suppliedVotes = estimateCount(p.upvotes);
+    const votes = Number.isFinite(suppliedVotes) ? Math.min(999999999999, suppliedVotes) : roll('votes' + i, 72, 15400);
     fill('subreddit', ['r/stories', 'r/lifeupdates', 'r/storytime', 'r/TrueOffMyChest'][roll('sub',0,3)]);
     fill('age', `${roll(`age${i}`,1,22)}h`);
     fill('title', part.title ?? doc.series_title ?? `Story ${hash(seed).toString(36)}`);
