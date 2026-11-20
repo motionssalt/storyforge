@@ -1,7 +1,7 @@
 {
   "project": "storyforge",
-  "phase": "Round 4 code and samples shipped; Cloudflare production rollout blocked",
-  "updated_at": "2026-11-20T10:57:48.643198Z",
+  "phase": "round5_voicestudio_complete",
+  "updated_at": "2026-11-20T13:37:06Z",
   "phases": {
     "1_vault_migration_and_repo_sanitization": "done",
     "2_schema_and_agent_prompt": "done",
@@ -16,7 +16,8 @@
     "round2_settings_media": "deployed; local authenticated browser passed and live public checks passed",
     "11_round3_sf011_prompt_idea_insertion": "done_deployed_verified",
     "12_round3_sf009_card_shadow_clipping": "done_eye_checked_verified",
-    "13_round3_sf010_delete_any_task": "done_deployed_verified"
+    "13_round3_sf010_delete_any_task": "done_deployed_verified",
+    "14_round5_voicestudio_default_samples_design_cloning_tags": "done_deployed_verified"
   },
   "decisions": [
     "Stored private research vault (skill/, analysis/, data/, old BUILD_STATE.json, AGENT_PROMPT) in Cloudflare Workers KV namespace 'storyforge-vault' (contact sheets chunked into <= 4.5 MB zips under KV's 25 MiB per-value limit).",
@@ -46,7 +47,7 @@
     "SF-010: Added state-aware Delete button and plain in-page confirmation modal on every task card, backed by POST /api/tasks/delete (and DELETE /api/tasks). Uses D1 runtime_state tombstones (deleted_task:<id>) to guarantee non-resurrection against late workflow/log/status callbacks and cron ticks, cancels active GitHub Actions runs via stored task_run:<id> or workflow run-name matching, cancels not-yet-live Zernio posts via DELETE /v1/posts/{id} while reporting already-live posts, deletes renders Release assets by ID/filename/prefix without ever touching shared resources, and preserves delete_failed status for idempotent retry on partial failure."
   ],
   "blockers": [],
-  "next_action": "Use a valid Cloudflare token to read the production KV prompt first; compare it to the private staged Round 4 draft, preserve any additional current instructions, and write vault:agent_prompt. Deploy web/ to the Pages project serving storyforge-sfb.pages.dev and redeploy cron-worker/ if desired. Authenticate to live Pages and verify sample streaming, format+validation, queue/render and cancellation. Collect long and warm-cache runner logs and update this state; verify actual Auto chat outputs before claiming format distribution.",
+  "next_action": "Round 5 complete. Optional next session: UI polish or commercial TTS weights.",
   "verification": {
     "vault": {
       "values_verified": 35,
@@ -279,5 +280,152 @@
     ],
     "blockers": [],
     "next_action": "Round 4 complete. Optional future session: UI polish or commercial-licensed expressive TTS weights if commercial monetization is needed."
+  },
+  "round5": {
+    "status": "complete",
+    "updated_at": "2026-11-20T13:37:06Z",
+    "task1_root_cause_and_fix": {
+      "root_cause": "1) web/shared/db.ts getSettings() defaulted voice_engine to 'edge' when no settings row existed in D1 (confirmed: live D1 settings had no voice_engine row). 2) In web/public/app.js, changing #setVoiceEngine only ran populateSettingsVoices() in-memory without saving /api/settings or updating the Create screen unless Save settings was clicked, and POST /api/render did not accept or send voice_engine from the Create screen. 3) pipeline/run_job.py, pipeline/tts_engine.py, and .github/workflows/render.yml also defaulted to 'edge'.",
+      "fixes": [
+        "Default voice_engine = 'voicestudio' in web/shared/types.ts, web/shared/db.ts, pipeline/run_job.py, pipeline/tts_engine.py, and .github/workflows/render.yml (Edge TTS kept selectable).",
+        "Linked Settings (#setVoiceEngine) and Create (#createEngine) selectors; changing either persists /api/settings and updates the Create voice picker immediately; POST /api/render accepts explicit voice_engine and passes it via workflow_dispatch inputs.",
+        "Fail loudly on VoiceStudio failure with never-silent-Edge-fallback guarantee; render logs print 'Voice: VoiceStudio / <voice_id> (speedup=X.XXx)' and engine/voice details surface per task."
+      ],
+      "verified_runs": {
+        "long_two_part_voicestudio": {
+          "run_id": 44735421938,
+          "url": "https://github.com/motionssalt/storyforge/actions/runs/44735421938",
+          "conclusion": "success",
+          "voice": "vs-harper",
+          "speedup": 1.25,
+          "snapshot_bytes": 3267465820,
+          "cache_hit_seconds": 0.05,
+          "cpu_model_load_seconds": 1.61,
+          "part1": {
+            "words": 307,
+            "gen_resample_sec": 778.55,
+            "align_sec": 9.09,
+            "finished_mp4_sec": 76.86
+          },
+          "part2": {
+            "words": 296,
+            "gen_resample_sec": 780.16,
+            "align_sec": 9.46,
+            "finished_mp4_sec": 78.24
+          },
+          "total_finished_sec": 155.1,
+          "wall_time": "~32m02s (single job, well under 100m timeout)"
+        },
+        "cancellation": {
+          "run_id": 44735952772,
+          "url": "https://github.com/motionssalt/storyforge/actions/runs/44735952772",
+          "conclusion": "cancelled"
+        }
+      }
+    },
+    "task2_normal_samples_and_player": {
+      "status": "complete",
+      "run_id": 44743629386,
+      "url": "https://github.com/motionssalt/storyforge/actions/runs/44743629386",
+      "wall_time": "~13m09s across 6 parallel shards + publish",
+      "release_tag": "voice-samples",
+      "asset_count": 52,
+      "breakdown": "35 VoiceStudio vs-*.mp3 + 16 Edge en-*.mp3 + 1 voices.json (zero legacy -neutral/-whisper files)",
+      "voicestudio_qc": {
+        "all_ok": true,
+        "whisper_match_range": "0.950-1.000",
+        "duration_sec_range": "9.68-10.69",
+        "rms_db_range": "-26.3 to -17.9"
+      },
+      "edge_samples": {
+        "count": 16,
+        "duration_sec_range": "9.29-10.10",
+        "retries_and_backoff": "6 attempts with jittered exponential backoff and +0% fallback rate"
+      },
+      "format": "128 kbps mono MP3 at 44100 Hz with coupled speedup F=1.25 applied; single-active playback; editable sample_text in Settings and Voices."
+    },
+    "task3_builtin_library_and_voice_design": {
+      "status": "complete",
+      "builtin_count": 35,
+      "dropped_after_qc": [
+        "vs-hannah (match 0.0)",
+        "vs-finn (match 0.696)",
+        "vs-miles (match 0.608)"
+      ],
+      "accents": [
+        "American",
+        "British",
+        "Australian",
+        "Canadian",
+        "Indian",
+        "Russian"
+      ],
+      "custom_voice_design_run": {
+        "run_id": 44736714248,
+        "url": "https://github.com/motionssalt/storyforge/actions/runs/44736714248",
+        "conclusion": "success",
+        "snapshot_sec": 0.09,
+        "cpu_load_sec": 1.23,
+        "gen_resample_sec": 81.78,
+        "preview_duration_sec": 10.38
+      }
+    },
+    "task4_my_voices_cloning": {
+      "status": "complete",
+      "privacy_storage": "Cloudflare KV vault (STORYFORGE_VAULT) chunked in 4 MiB segments up to 20 MiB per upload (never public git or public GitHub Releases)",
+      "middleware_upload_fix": "web/functions/_middleware.ts raised body limit to 20 MiB for /api/voices/cloned/clip, /api/internal/voice-prompt, and /api/internal/voice-preview (commit 36c2ad1)",
+      "emotion_reference_slots": [
+        "base",
+        "calm",
+        "tense",
+        "angry",
+        "shocked",
+        "sad",
+        "sarcastic",
+        "excited"
+      ],
+      "verified_runs": {
+        "prepare_cloned": {
+          "run_id": 44735615086,
+          "url": "https://github.com/motionssalt/storyforge/actions/runs/44735615086",
+          "conclusion": "success",
+          "snapshot_sec": 0.07,
+          "cpu_load_sec": 1.58,
+          "base_pt_bytes": 11432,
+          "base_build_sec": 2.44,
+          "tense_pt_bytes": 10991,
+          "tense_build_sec": 2.06
+        },
+        "cloned_render": {
+          "run_id": 44736711038,
+          "url": "https://github.com/motionssalt/storyforge/actions/runs/44736711038",
+          "conclusion": "success",
+          "snapshot_sec": 0.11,
+          "cpu_load_sec": 1.13,
+          "cached_pt_loaded": true,
+          "gen_resample_sec": 120.27,
+          "align_sec": 1.96,
+          "finished_mp4_sec": 5.82,
+          "ffprobe_verified": "1080x1920 H.264 + 44100 Hz AAC, 5.83s, mean -22.3 dB"
+        }
+      }
+    },
+    "task5_expressiveness_and_kv_prompt": {
+      "status": "complete",
+      "mapping_documented_in": "docs/VOICESTUDIO.md",
+      "sound_tags_and_markers": "[pause] -> 380ms raw silence; inline OmniVoice tags [sigh], [laughter] ([laugh] alias), [confirmation-en], [question-*], [surprise-*], [dissatisfaction-hnn] forwarded to OmniVoice and stripped from cards/subtitles; emotion='whisper' appends whisper to Voice Design instruct; per-emotion cloned reference slots override base clip.",
+      "kv_agent_prompt": "Updated vault:agent_prompt in live storyforge-vault KV (16,663 bytes) with write-for-the-ear guidance, natural contractions, and [pause]/[sigh]/[laughter]/[surprise-ah]/[question-ah]/[dissatisfaction-hnn] tags in Examples A & B."
+    },
+    "deployment": {
+      "pages_url": "https://storyforge-sfb.pages.dev",
+      "latest_pages_deployment": "https://9c4b04f3.storyforge-sfb.pages.dev",
+      "cron_worker": "https://storyforge-cron.motionssalt.workers.dev",
+      "d1_smoke_cleaned": true
+    },
+    "not_tested_live": [
+      "Authenticated browser click-through on live storyforge-sfb.pages.dev (AUTH_PASSWORD is stored only in Cloudflare Pages secrets).",
+      "Human subjective listening evaluation of accented Voice Design presets (verified programmatically via faster-whisper match >= 0.950, duration 9.68-10.69s, RMS -26.3 to -17.9 dB).",
+      "Real human microphone / Nigerian-accent cloning upload from a browser (cloned smoke test used a synthesized reference clip via API)."
+    ]
   }
 }
