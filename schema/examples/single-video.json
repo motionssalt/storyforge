@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "series_title": "The Uncashed Deposit Receipt",
   "format": "single",
   "parts": [
@@ -18,16 +18,19 @@
         "theme": "dark",
         "subreddit": "r/pettyrevenge",
         "username": "u/oak_cabinet_co",
-        "age": "6h",
-        "awards": [
-          {
-            "type": "gold",
-            "count": 2
-          }
-        ],
+        "age": "5h",
+        "awards": [],
         "nsfw": false,
         "verified": true,
-        "title": "Neighbor asked me to sign a blank receipt for work she never paid for, then took me to court with a cropped fake."
+        "title": "Neighbor asked me to sign a blank receipt for work she never paid for, then took me to court with a cropped fake.",
+        "upvotes": 284,
+        "comments": 43,
+        "shares": 11,
+        "karma": "1.2k",
+        "avatar": {
+          "style": "cartoon"
+        },
+        "flair": "Small win"
       },
       "lines": [
         {

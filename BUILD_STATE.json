@@ -1,7 +1,7 @@
 {
   "project": "storyforge",
-  "phase": "Round 3 complete: SF-011, SF-009, and SF-010 fixed, verified, committed, and deployed",
-  "updated_at": "2026-11-19T15:42:00Z",
+  "phase": "Round 4 A+B implementation",
+  "updated_at": "2026-11-20T10:01:52.565Z",
   "phases": {
     "1_vault_migration_and_repo_sanitization": "done",
     "2_schema_and_agent_prompt": "done",
@@ -165,5 +165,19 @@
       "Live Zernio DELETE /v1/posts/{id} against a real Zernio account (no live Zernio API key configured).",
       "Full GitHub Actions MP4 render run after SF-009 (Chromium + FFmpeg frame compositing was verified locally)."
     ]
+  },
+  "round4": {
+    "A": "Format control and safe placeholder substitution implemented; vault authentication and production tests pending.",
+    "B": "V3 and shared Worker/runner compatibility normalizer implemented; render verification pending.",
+    "C": "pending",
+    "D": "pending",
+    "decisions": [
+      "Do not touch host-frontend/. No UI restyling.",
+      "Use a single JavaScript production normalizer in the Worker and runner."
+    ],
+    "blockers": [
+      "Vault endpoint returned HTTP 401; confirm direct account-token access before updating private template."
+    ],
+    "next_action": "Verify/push A+B, recover KV access, then implement stable photo avatar sources."
   }
 }

@@ -17,7 +17,8 @@ export interface PromptRenderError {
 export function renderAgentPrompt(
   template: string | null | undefined,
   rawIdea: unknown,
-  rawTargetWpm?: unknown
+  rawTargetWpm?: unknown,
+  rawFormat?: unknown
 ): PromptRenderResult | PromptRenderError {
   const idea = typeof rawIdea === "string" ? rawIdea : String(rawIdea ?? "");
   if (!idea.trim()) {
@@ -47,10 +48,16 @@ export function renderAgentPrompt(
   const targetWords90s = Math.round((90 / 60) * targetWpm);
 
   // Use function replacers so special replacement sequences ($&, $1, $$, $', $`) in the user's idea are never interpreted.
-  const prompt = template
-    .replace(IDEA_MARKER_RE, () => idea)
-    .replace(TARGET_WPM_RE, () => String(targetWpm))
-    .replace(TARGET_WORDS_90S_RE, () => String(targetWords90s));
+  const formats = {single: 'FORMAT: single video (exactly one part)', two_part: 'FORMAT: two parts (exactly two parts)', auto: 'FORMAT: Auto (you decide using the rule below)'};
+  const format = rawFormat === 'single' || rawFormat === 'two_part' ? rawFormat : 'auto';
+  const hasFormat = template.includes('{{FORMAT}}');
+  const text = template.replace(/\{\{(IDEA|STORY_IDEA|TARGET_WPM|TARGET_WORDS_90S|FORMAT)\}\}/g, (_, key) => {
+    if (key === 'FORMAT') return formats[format];
+    if (key === 'TARGET_WPM') return String(targetWpm);
+    if (key === 'TARGET_WORDS_90S') return String(targetWords90s);
+    return idea;
+  });
+  const prompt = hasFormat ? text : formats[format] + '\n\n' + text;
 
   if (!prompt.includes(idea)) {
     return {

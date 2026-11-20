@@ -86,6 +86,8 @@
     <section>
       <h2>1. Story Idea &rarr; Agent Prompt</h2>
       <label for="ideaInput">Story idea (real or made up)</label>
+      <label for="storyFormat">Format</label>
+      <select id="storyFormat"><option value="auto">Auto</option><option value="single">Single video</option><option value="two_part">Two parts</option></select>
       <textarea id="ideaInput" rows="4" placeholder="Paste a story idea or premise..."></textarea>
       <div class="grid2">
         <div>
@@ -110,7 +112,7 @@
     <section>
       <h2>2. Production JSON</h2>
       <label for="jsonInput">Paste AI-generated production JSON</label>
-      <textarea id="jsonInput" class="mono" rows="10" placeholder='{"schema_version": 2, "series_title": "...", "format": "single", "parts": [...]}'></textarea>
+      <textarea id="jsonInput" class="mono" rows="10" placeholder='{"schema_version": 3, "series_title": "...", "format": "single", "parts": [...]}'></textarea>
       <div class="row">
         <button id="validateBtn" type="button" class="secondary">Validate JSON</button>
       </div>

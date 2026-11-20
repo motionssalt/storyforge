@@ -872,7 +872,7 @@
     try {
       const r = await api("/api/prompt", {
         method: "POST",
-        body: JSON.stringify({ idea, target_wpm: Number(wpmInput.value) || 250 }),
+        body: JSON.stringify({ idea, format: document.getElementById("storyFormat").value, target_wpm: Number(wpmInput.value) || 250 }),
       });
       if (!r.ok) {
         promptOutput.value = "";
@@ -977,7 +977,7 @@
     }, 0);
     const wpm = Number(wpmInput.value) || 250;
     const estSec = Math.round((totalWords / wpm) * 60);
-    jsonStatus.innerHTML = `<div class="ok">Valid v${escapeHtml(normalized.schema_version || 2)} (${escapeHtml(normalized.format)}): "${escapeHtml(normalized.series_title)}" &mdash; ${normalized.parts.length} part(s), ${totalWords} words (~${estSec}s at ${wpm} WPM).${noticeHtml}</div>`;
+    jsonStatus.innerHTML = `<div class="ok">Valid v${escapeHtml(normalized.schema_version || 3)} (${escapeHtml(normalized.format)}): "${escapeHtml(normalized.series_title)}" &mdash; ${normalized.parts.length} part(s), ${totalWords} words (~${estSec}s at ${wpm} WPM).${noticeHtml}</div>`;
     return normalized;
   }
 

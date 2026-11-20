@@ -415,13 +415,22 @@ CARD_HTML_TEMPLATE = r"""<!doctype html>
       return `<div class="r-avatar-wrap ${sizeClass}" style="background-color:${bg};"><img src="${esc(url)}" alt="${esc(cleanName)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" /><span class="r-avatar-fallback" style="display:none;">${esc(initial)}</span></div>`;
     }
 
+    function formatCount(value) {
+      const match = String(value ?? '').toLowerCase().match(/^([0-9.]+)([kmb]?)$/);
+      if (!match) return '';
+      const n = Number(match[1]) * ({k:1e3,m:1e6,b:1e9}[match[2]] ?? 1);
+      const [unit, suffix] = [[1e9,'B'],[1e6,'M'],[1e3,'K'],[1,'']].find(([u]) => n >= u) ?? [1,''];
+      return (unit === 1 ? Math.round(n) : Number((n / unit).toFixed(1))) + suffix;
+    }
+
     function renderAwards(awards) {
+      if (!Array.isArray(awards)) awards = Number.parseFloat(awards) > 0 ? [{type:'gold', count:awards}] : [];
       if (!awards || awards.length === 0) return "";
       const itemsHtml = awards.map((aw) => {
         let iconSvg = ICONS.awardGold;
         if (aw.type === "helpful") iconSvg = ICONS.awardHelpful;
         if (aw.type === "heart") iconSvg = ICONS.awardHeart;
-        const label = aw.label ? esc(aw.label) : (aw.count ? esc(aw.count) : "1");
+        const label = aw.label ? esc(aw.label) : (aw.count != null ? esc(formatCount(aw.count)) : "");
         return `<span class="r-award-chip">${iconSvg}<span>${label}</span></span>`;
       }).join("");
       return `<div class="r-awards-row">${itemsHtml}</div>`;
@@ -802,13 +811,22 @@ SCROLLING_POST_HTML_TEMPLATE = r"""<!doctype html>
       return `<div class="r-avatar-wrap" style="background-color:${bg};"><img src="${esc(url)}" alt="${esc(cleanName)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" /><span class="r-avatar-fallback" style="display:none;">${esc(initial)}</span></div>`;
     }
 
+    function formatCount(value) {
+      const match = String(value ?? '').toLowerCase().match(/^([0-9.]+)([kmb]?)$/);
+      if (!match) return '';
+      const n = Number(match[1]) * ({k:1e3,m:1e6,b:1e9}[match[2]] ?? 1);
+      const [unit, suffix] = [[1e9,'B'],[1e6,'M'],[1e3,'K'],[1,'']].find(([u]) => n >= u) ?? [1,''];
+      return (unit === 1 ? Math.round(n) : Number((n / unit).toFixed(1))) + suffix;
+    }
+
     function renderAwards(awards) {
+      if (!Array.isArray(awards)) awards = Number.parseFloat(awards) > 0 ? [{type:'gold', count:awards}] : [];
       if (!awards || awards.length === 0) return "";
       const itemsHtml = awards.map((aw) => {
         let iconSvg = ICONS.awardGold;
         if (aw.type === "helpful") iconSvg = ICONS.awardHelpful;
         if (aw.type === "heart") iconSvg = ICONS.awardHeart;
-        const label = aw.label ? esc(aw.label) : (aw.count ? esc(aw.count) : "1");
+        const label = aw.label ? esc(aw.label) : (aw.count != null ? esc(formatCount(aw.count)) : "");
         return `<span class="r-award-chip">${iconSvg}<span>${label}</span></span>`;
       }).join("");
       return `<div class="r-awards-row">${itemsHtml}</div>`;
@@ -829,9 +847,9 @@ SCROLLING_POST_HTML_TEMPLATE = r"""<!doctype html>
       const nsfwHtml = post.nsfw ? `<div class="r-nsfw-row"><span class="r-nsfw-pill">NSFW <span class="r-nsfw-18">18+</span></span></div>` : "";
       const footerHtml = post.show_footer !== false ? `
         <div class="r-post-footer">
-          <div class="r-action-pill">${ICONS.upvote}<span class="r-vote-score">${esc(post.upvotes || "14.2K")}</span><span class="r-vote-divider"></span>${ICONS.downvote}</div>
-          <div class="r-action-pill">${ICONS.comment}<span>${esc(post.comments_count || "2.8K")}</span></div>
-          <div class="r-action-pill">${ICONS.share}<span>Share</span></div>
+          <div class="r-action-pill">${ICONS.upvote}<span class="r-vote-score">${esc(formatCount(post.upvotes))}</span><span class="r-vote-divider"></span>${ICONS.downvote}</div>
+          <div class="r-action-pill">${ICONS.comment}<span>${esc(formatCount(post.comments))}</span></div>
+          <div class="r-action-pill">${ICONS.share}<span>${esc(formatCount(post.shares))}</span></div>
           <div class="r-action-pill">${ICONS.awardOutline}</div>
         </div>` : "";
 
@@ -839,16 +857,17 @@ SCROLLING_POST_HTML_TEMPLATE = r"""<!doctype html>
       stage.innerHTML = `
         <article id="post-card" class="r-card ${themeClass}">
           <div class="r-post-header">
-            ${renderAvatar(post.avatar_url, post.username || post.subreddit || "storyteller")}
+            ${renderAvatar(post.avatar_url, post.username)}
             <div class="r-post-meta">
-              <div class="r-sub-name">${esc(post.subreddit || "r/stories")}</div>
+              <div class="r-sub-name">${esc(post.subreddit)}</div>
               <div class="r-author-line">
-                <span class="r-username-blue">${esc(post.username || "u/storyteller")}</span>
+                <span class="r-username-blue">${esc(post.username)}</span>
                 ${verifiedHtml}
-                <span class="r-dot-age">· ${esc(post.age || "6h")}</span>
+                <span class="r-dot-age">· ${esc(post.age)} · ${esc(formatCount(post.karma ?? post.follower_count))} ${post.karma != null ? "karma" : "followers"}</span>
               </div>
             </div>
           </div>
+          ${post.flair ? `<div class="r-awards-row"><span class="r-award-chip">${esc(post.flair)}</span></div>` : ""}
           ${awardsHtml}
           ${nsfwHtml}
           <h3 class="r-post-title">${esc(post.title)}</h3>

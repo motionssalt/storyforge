@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import sys
+import subprocess
 import traceback
 import urllib.request
 from typing import Any
@@ -28,61 +29,14 @@ from tts_engine import VoiceStudioCoupledSpeedupHook, get_tts_engine
 
 
 def migrate_legacy_production_json(doc: dict[str, Any]) -> dict[str, Any]:
-    """Normalize legacy v1 (cards timeline) production JSON to v2 (single post per part)."""
-    if not isinstance(doc, dict):
-        return doc
-    parts = doc.get("parts")
-    if not isinstance(parts, list):
-        return doc
-    out = json.loads(json.dumps(doc))
-    migrated_any = False
-    for part in out.get("parts", []):
-        if not isinstance(part, dict):
-            continue
-        if "post" not in part and isinstance(part.get("cards"), list) and part["cards"]:
-            migrated_any = True
-            cards = part["cards"]
-            picked = None
-            for item in cards:
-                c = item.get("card") if isinstance(item, dict) else None
-                if isinstance(c, dict) and c.get("type") in ("post", "branded"):
-                    picked = c
-                    break
-            if picked is None and isinstance(cards[0], dict):
-                picked = cards[0].get("card") if isinstance(cards[0].get("card"), dict) else {}
-            picked = picked or {}
-            post_obj: dict[str, Any] = {
-                "theme": "light" if picked.get("theme") == "light" else "dark",
-                "subreddit": str(picked.get("subreddit") or "r/stories"),
-                "username": str(picked.get("username") or picked.get("handle") or "u/storyteller"),
-                "title": str(picked.get("title") or part.get("title") or "Story"),
-            }
-            if picked.get("age"):
-                post_obj["age"] = str(picked["age"])
-            if isinstance(picked.get("awards"), list):
-                post_obj["awards"] = picked["awards"]
-            if "nsfw" in picked:
-                post_obj["nsfw"] = bool(picked["nsfw"])
-            if "verified" in picked:
-                post_obj["verified"] = bool(picked["verified"])
-            elif picked.get("type") == "branded":
-                post_obj["verified"] = True
-            if picked.get("upvotes"):
-                post_obj["upvotes"] = str(picked["upvotes"])
-            if picked.get("comments_count"):
-                post_obj["comments_count"] = str(picked["comments_count"])
-            if "show_footer" in picked:
-                post_obj["show_footer"] = bool(picked["show_footer"])
-            part["post"] = post_obj
-            part.pop("cards", None)
-            if not part.get("description"):
-                fallback_desc = str(part.get("story_so_far") or post_obj["title"] or part.get("title") or "Story segment").strip()
-                if len(fallback_desc) < 10:
-                    fallback_desc = (fallback_desc + " — full story narrated in this clip.").strip()
-                part["description"] = fallback_desc
-    if migrated_any or ("schema_version" not in out and all(isinstance(p, dict) and "post" in p for p in out.get("parts", []))):
-        out["schema_version"] = 2
-    return out
+    """Use the exact same normalization as the Pages API."""
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    result = subprocess.run(["node", os.path.join(root, "pipeline", "normalize-production.mjs")],
+                            input=json.dumps(doc), text=True, check=True, capture_output=True)
+    normalized = json.loads(result.stdout)
+    if normalized["errors"]:
+        raise ValueError("; ".join(normalized["errors"]))
+    return normalized["doc"]
 
 
 def worker_get_job(worker_url: str, job_id: str, secret: str) -> dict[str, Any]:

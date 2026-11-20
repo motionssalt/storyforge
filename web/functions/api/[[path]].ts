@@ -1,3 +1,4 @@
+import { normalizeProduction } from '../../shared/production.mjs';
 import validateSchema from "../../lib/production-validator.js";
 import {
   appendTaskLogs,
@@ -93,77 +94,6 @@ function repairPastedProductionText(raw: string): { ok: true; parsed: any; repai
   }
 }
 
-function migrateProductionJson(doc: any): { doc: any; notices: string[] } {
-  if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
-    return { doc, notices: [] };
-  }
-  const notices: string[] = [];
-  const cloned = JSON.parse(JSON.stringify(doc));
-  if (Array.isArray(cloned.parts)) {
-    let migratedLegacy = false;
-    cloned.parts.forEach((part: any, pi: number) => {
-      if (!part || typeof part !== "object") return;
-      if (!part.post && Array.isArray(part.cards) && part.cards.length > 0) {
-        migratedLegacy = true;
-        const cards: any[] = part.cards;
-        let picked: any = null;
-        for (const item of cards) {
-          const c = item?.card;
-          if (c && (c.type === "post" || c.type === "branded")) {
-            picked = c;
-            break;
-          }
-        }
-        if (!picked) {
-          picked = cards[0]?.card || {};
-        }
-        const postObj: any = {
-          theme: picked.theme === "light" ? "light" : "dark",
-          subreddit: String(picked.subreddit || "r/stories"),
-          username: String(picked.username || picked.handle || "u/storyteller"),
-          title: String(picked.title || part.title || "Story"),
-        };
-        if (picked.age) postObj.age = String(picked.age);
-        if (Array.isArray(picked.awards)) postObj.awards = picked.awards;
-        if (typeof picked.nsfw === "boolean") postObj.nsfw = picked.nsfw;
-        if (typeof picked.verified === "boolean") {
-          postObj.verified = picked.verified;
-        } else if (picked.type === "branded") {
-          postObj.verified = true;
-        }
-        if (picked.upvotes) postObj.upvotes = String(picked.upvotes);
-        if (picked.comments_count) postObj.comments_count = String(picked.comments_count);
-        if (typeof picked.show_footer === "boolean") postObj.show_footer = picked.show_footer;
-        part.post = postObj;
-        const ignored = Math.max(0, cards.length - 1);
-        delete part.cards;
-        if (!part.description) {
-          let fallbackDesc = String(part.story_so_far || postObj.title || part.title || "").trim();
-          if (fallbackDesc.length < 10) {
-            fallbackDesc = `${fallbackDesc || "Story segment"} — full story narrated in this clip.`;
-          }
-          part.description = fallbackDesc;
-        }
-        notices.push(
-          `Converted legacy "cards" timeline in Part ${pi + 1} to a v2 "post" using its first ${picked.type || "post"} card${ignored > 0 ? ` and ignored ${ignored} other card(s)` : ""}.`
-        );
-      }
-    });
-    if (
-      migratedLegacy ||
-      (cloned.schema_version === undefined &&
-        cloned.parts.length > 0 &&
-        cloned.parts.every((p: any) => p && typeof p === "object" && p.post))
-    ) {
-      cloned.schema_version = 2;
-      if (!migratedLegacy) {
-        notices.push('Added missing "schema_version": 2.');
-      }
-    }
-  }
-  return { doc: cloned, notices };
-}
-
 function jsonResp(data: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -246,8 +176,8 @@ function validateProductionJson(doc: any): string[] {
     }
     return errors;
   }
-  if (doc.schema_version !== 2) {
-    errors.push("schema_version: must be 2.");
+  if (doc.schema_version !== 3) {
+    errors.push("schema_version: must be 3.");
   }
   if (typeof doc.series_title !== "string" || doc.series_title.trim().length < 2) {
     errors.push("series_title: must be a non-empty string (at least 2 characters).");
@@ -1257,7 +1187,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       return jsonResp({ error: "Invalid JSON body" }, 400);
     }
     const template = await env.STORYFORGE_VAULT.get("vault:agent_prompt");
-    const rendered = renderAgentPrompt(template, body.idea, body.target_wpm);
+    const rendered = renderAgentPrompt(template, body.idea, body.target_wpm, body.format);
     if (!rendered.ok) {
       return jsonResp({ error: rendered.error }, rendered.status);
     }
@@ -1281,11 +1211,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       prod = repaired.parsed;
       notices.push(...repaired.repairs);
     }
-    const migrated = migrateProductionJson(prod);
+    const migrated = normalizeProduction(prod);
     prod = migrated.doc;
     notices.push(...migrated.notices);
 
-    const errors = validateProductionJson(prod);
+    const errors = [...migrated.errors, ...validateProductionJson(prod)];
     if (errors.length > 0) {
       return jsonResp({ valid: false, errors, notices }, 400);
     }
@@ -1307,8 +1237,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       if (!repaired.ok) return jsonResp({ error: repaired.error }, 400);
       prod = repaired.parsed;
     }
-    prod = migrateProductionJson(prod).doc;
-    const errors = validateProductionJson(prod);
+    const migrated = normalizeProduction(prod);
+    prod = migrated.doc;
+    const errors = [...migrated.errors, ...validateProductionJson(prod)];
     if (errors.length > 0) {
       return jsonResp({ error: "Invalid production JSON", errors }, 400);
     }

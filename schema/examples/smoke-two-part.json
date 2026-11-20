@@ -1,11 +1,11 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "series_title": "Technical smoke test: The spare key",
   "format": "two_part",
   "parts": [
     {
       "part_number": 1,
-      "title": "The spare key \u2014 part 1",
+      "title": "The spare key — part 1",
       "hashtags": [
         "#fiction",
         "#storytime"
@@ -15,10 +15,20 @@
         "theme": "dark",
         "subreddit": "r/fiction",
         "username": "u/spare_key_story",
-        "age": "2h",
+        "age": "18h",
         "nsfw": false,
         "verified": false,
-        "title": "My neighbor returned my missing key."
+        "title": "My neighbor returned my missing key.",
+        "upvotes": "9.8k",
+        "comments": 631,
+        "shares": 205,
+        "awards": [],
+        "karma": 7240,
+        "avatar": {
+          "style": "photo_object",
+          "keyword": "watch"
+        },
+        "flair": "Original post"
       },
       "lines": [
         {
@@ -41,7 +51,7 @@
     },
     {
       "part_number": 2,
-      "title": "The spare key \u2014 part 2",
+      "title": "The spare key — part 2",
       "hashtags": [
         "#fiction",
         "#storytime"
@@ -51,10 +61,25 @@
         "theme": "light",
         "subreddit": "r/fiction",
         "username": "u/spare_key_story",
-        "age": "1h",
+        "age": "2h",
         "nsfw": false,
         "verified": false,
-        "title": "The warning led to a birthday surprise."
+        "title": "The warning led to a birthday surprise.",
+        "upvotes": "16.2k",
+        "comments": 947,
+        "shares": 414,
+        "awards": [
+          {
+            "type": "helpful",
+            "count": 2
+          }
+        ],
+        "karma": 7240,
+        "avatar": {
+          "style": "photo_object",
+          "keyword": "watch"
+        },
+        "flair": "Update"
       },
       "lines": [
         {

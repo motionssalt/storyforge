@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "series_title": "The Notary's Pen",
   "format": "two_part",
   "parts": [
@@ -18,16 +18,20 @@
         "theme": "dark",
         "subreddit": "r/pettyrevenge",
         "username": "u/watchmaker_nephew",
-        "age": "9h",
-        "awards": [
-          {
-            "type": "gold",
-            "count": 2
-          }
-        ],
+        "age": "18h",
+        "awards": [],
         "nsfw": false,
         "verified": true,
-        "title": "PART 1 | My uncle's lawyer asked why I brought wet wipes to the reading of his will"
+        "title": "PART 1 | My uncle's lawyer asked why I brought wet wipes to the reading of his will",
+        "upvotes": "9.8k",
+        "comments": 631,
+        "shares": 205,
+        "karma": 7240,
+        "avatar": {
+          "style": "photo_object",
+          "keyword": "watch"
+        },
+        "flair": "Original post"
       },
       "lines": [
         {
@@ -104,11 +108,11 @@
           "emotion": "shocked"
         }
       ],
-      "description": "Part 1: At Uncle Leo's will reading, Cousin Trevor presents a brand-new notarized addendum claiming 90% of the estate\u2014until a cheap wet wipe tests the signature ink."
+      "description": "Part 1: At Uncle Leo's will reading, Cousin Trevor presents a brand-new notarized addendum claiming 90% of the estate—until a cheap wet wipe tests the signature ink."
     },
     {
       "part_number": 2,
-      "title": "[PART 2] Fresh fountain ink bleeds under moisture\u2014laser-printed forged signatures don't move a millimeter",
+      "title": "[PART 2] Fresh fountain ink bleeds under moisture—laser-printed forged signatures don't move a millimeter",
       "hashtags": [
         "#redditstories",
         "#storytime",
@@ -121,17 +125,25 @@
         "theme": "dark",
         "subreddit": "r/pettyrevenge",
         "username": "u/watchmaker_nephew",
-        "age": "5h",
+        "age": "2h",
         "awards": [
           {
             "type": "helpful",
-            "count": 1,
-            "label": "Smart"
+            "count": 2
           }
         ],
         "nsfw": false,
         "verified": true,
-        "title": "PART 2 | Fresh fountain ink bleeds under moisture\u2014laser-printed forged signatures don't move a millimeter"
+        "title": "PART 2 | Fresh fountain ink bleeds under moisture—laser-printed forged signatures don't move a millimeter",
+        "upvotes": "16.2k",
+        "comments": 947,
+        "shares": 414,
+        "karma": 7240,
+        "avatar": {
+          "style": "photo_object",
+          "keyword": "watch"
+        },
+        "flair": "Update"
       },
       "lines": [
         {
@@ -146,7 +158,7 @@
         },
         {
           "id": "L3",
-          "text": "I didn't blink\u2014I pulled Uncle Leo's birthday card out of my coat pocket and touched the same wet wipe to his signature inside the card.",
+          "text": "I didn't blink—I pulled Uncle Leo's birthday card out of my coat pocket and touched the same wet wipe to his signature inside the card.",
           "emotion": "calm"
         },
         {
@@ -189,7 +201,7 @@
         },
         {
           "id": "L11",
-          "text": "Trevor didn't say another word\u2014he unclasped Uncle Leo's vintage gold watch, set it beside the damp wet wipe, and walked out beside two security guards.",
+          "text": "Trevor didn't say another word—he unclasped Uncle Leo's vintage gold watch, set it beside the damp wet wipe, and walked out beside two security guards.",
           "emotion": "calm"
         },
         {

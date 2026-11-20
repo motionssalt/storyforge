@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://storyforge.motionssalt.com/schema/production.schema.json",
-  "title": "StoryForge Production JSON v2",
+  "title": "StoryForge Production JSON v3",
   "description": "Production script, narration emotion tags, and persistent Reddit post metadata for a single or two-part StoryForge vertical video.",
   "type": "object",
   "required": [
@@ -15,7 +15,7 @@
     "schema_version": {
       "type": "integer",
       "enum": [
-        2
+        3
       ]
     },
     "series_title": {
@@ -106,10 +106,7 @@
           ]
         },
         "count": {
-          "type": [
-            "integer",
-            "string"
-          ]
+          "$ref": "#/$defs/count"
         },
         "label": {
           "type": "string"
@@ -122,7 +119,15 @@
         "subreddit",
         "username",
         "title",
-        "theme"
+        "theme",
+        "age",
+        "upvotes",
+        "comments",
+        "shares",
+        "awards",
+        "nsfw",
+        "verified",
+        "avatar"
       ],
       "additionalProperties": false,
       "properties": {
@@ -142,10 +147,18 @@
           "maxLength": 32
         },
         "awards": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/award"
-          }
+          "anyOf": [
+            {
+              "type": "array",
+              "maxItems": 10,
+              "items": {
+                "$ref": "#/$defs/award"
+              }
+            },
+            {
+              "$ref": "#/$defs/count"
+            }
+          ]
         },
         "nsfw": {
           "type": "boolean"
@@ -166,17 +179,69 @@
           ]
         },
         "upvotes": {
-          "type": "string",
-          "maxLength": 24
-        },
-        "comments_count": {
-          "type": "string",
-          "maxLength": 24
+          "$ref": "#/$defs/count"
         },
         "show_footer": {
           "type": "boolean"
+        },
+        "comments": {
+          "$ref": "#/$defs/count"
+        },
+        "shares": {
+          "$ref": "#/$defs/count"
+        },
+        "karma": {
+          "$ref": "#/$defs/count"
+        },
+        "follower_count": {
+          "$ref": "#/$defs/count"
+        },
+        "flair": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "avatar": {
+          "type": "object",
+          "required": [
+            "style"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "style": {
+              "enum": [
+                "photo_person",
+                "photo_object",
+                "photo_animal",
+                "photo_scenery",
+                "cartoon"
+              ]
+            },
+            "gender": {
+              "enum": [
+                "male",
+                "female",
+                "any"
+              ]
+            },
+            "keyword": {
+              "type": "string",
+              "maxLength": 32
+            }
+          }
         }
-      }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "karma"
+          ]
+        },
+        {
+          "required": [
+            "follower_count"
+          ]
+        }
+      ]
     },
     "part": {
       "type": "object",
@@ -233,6 +298,19 @@
           "maxLength": 2000
         }
       }
+    },
+    "count": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999999999999
+        },
+        {
+          "type": "string",
+          "pattern": "^\\d{1,12}(?:\\.\\d{1,2})?[kKmMbB]?$"
+        }
+      ]
     }
   }
 }
