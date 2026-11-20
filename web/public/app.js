@@ -104,7 +104,15 @@
   const bgLibraryGrid = document.getElementById("bgLibraryGrid");
 
   let activeTab = "create";
-  let voices = [];
+  let voices = [], allVoices = [], hasVoiceStudioSamples = false;
+  const setVoiceEngine = document.getElementById('setVoiceEngine');
+  const setVoiceSpeedup = document.getElementById('setVoiceSpeedup');
+  const engineStatus = document.getElementById('voiceEngineStatus');
+  const voiceStudioPresetOptions = [
+    {id:'vs-harper',name:'Harper',descriptor:'Female · American · lower register'},
+    {id:'vs-rowan',name:'Rowan',descriptor:'Male · British · lower register'},
+    {id:'vs-morgan',name:'Morgan',descriptor:'Female · British · mid register'},
+  ].map(v => ({...v,engine:'voicestudio'}));
   let bgClips = [];
   let settings = {
     default_voice_id: "en-US-AndrewMultilingualNeural",
@@ -270,16 +278,35 @@
   });
 
   // --- Voices ---
-  async function loadVoices() {
-    const res = await fetch("/voices.json");
-    const cfg = await res.json();
-    voices = cfg.voices || [];
-    const options = voices.map((v) =>
-      `<option value="${escapeHtml(v.id)}">${escapeHtml(v.name)} (${escapeHtml(v.gender)})</option>`
-    ).join("");
-    voiceSelect.innerHTML = setDefaultVoice.innerHTML = options;
-    if (voices.length && !selectedVoiceId) selectedVoiceId = voices[0].id;
+  function populateVoiceOptions(select, engine) {
+    const list = allVoices.filter(v => v.engine === engine);
+    select.innerHTML = list.map(v => '<option value="' + escapeHtml(v.id) + '">' + escapeHtml(v.name) + ' (' + escapeHtml(v.descriptor || v.gender) + ')</option>').join('');
+    return list;
   }
+
+  async function loadVoices() {
+    const cfg = await (await fetch('/voices.json')).json();
+    const response = await fetch('/api/voice-samples/voices.json').catch(() => null);
+    const release = response?.ok ? (await response.json().catch(() => ({}))).voices || [] : [];
+    const proxy = filename => filename ? '/api/voice-samples/' + encodeURIComponent(filename) : undefined;
+    hasVoiceStudioSamples = release.some(v => v.engine === 'voicestudio');
+    allVoices = (cfg.voices || []).map(v => {
+      const r = release.find(x => x.engine === 'edge' && x.id === v.id);
+      return {...v, engine:'edge', descriptor: r?.descriptor || [v.gender,v.accent].filter(Boolean).join(' · '), sample_neutral: proxy(r?.sample_file) || v.sample_neutral, sample_emotional: proxy(r?.emotional_sample_file) || v.sample_emotional};
+    }).concat(voiceStudioPresetOptions.map(v => {
+      const r = release.find(x => x.engine === v.engine && x.id === v.id);
+      return {...v, sample_neutral: proxy(r?.sample_file), sample_emotional: proxy(r?.emotional_sample_file)};
+    }));
+  }
+
+  function populateSettingsVoices() {
+    stopNarration();
+    populateVoiceOptions(setDefaultVoice, setVoiceEngine.value);
+    const saved = setVoiceEngine.value === 'voicestudio' ? settings.voicestudio_voice_id : settings.default_voice_id;
+    if (Array.from(setDefaultVoice.options).some(option => option.value === saved)) setDefaultVoice.value = saved;
+    engineStatus.textContent = setVoiceEngine.value === 'edge' ? 'Edge TTS ready.' : hasVoiceStudioSamples ? 'VoiceStudio samples ready. A cold runner downloads the model.' : 'VoiceStudio samples not published yet. First run downloads the model.';
+  }
+  setVoiceEngine.addEventListener('change', populateSettingsVoices);
 
   const players = Array.from(document.querySelectorAll("[data-narration]")).map((wrap) => {
     const select = wrap.dataset.narration === "settings" ? setDefaultVoice : voiceSelect;
@@ -294,12 +321,13 @@
       if (audio.hasAttribute("src")) status.textContent = "Couldn't load this narration sample.";
     });
     wrap.querySelectorAll("[data-sample]").forEach((button) => button.addEventListener("click", () => {
-      const voice = voices.find((v) => v.id === select.value);
+      const voice = allVoices.find((v) => v.id === select.value);
       if (!voice) { status.textContent = "Choose a narrator first."; return; }
       stopNarration();
       closeBackgroundPreview();
       const kind = button.dataset.sample;
-      const src = voice[`sample_${kind}`] || `/samples/${encodeURIComponent(voice.id)}_${kind}.mp3`;
+      const src = voice['sample_' + kind];
+      if (!src) { status.textContent = 'This sample has not been published yet.'; return; }
       audio.src = src;
       status.textContent = `${voice.name} · ${kind === "neutral" ? "Neutral" : "Dramatic"} sample`;
       audio.classList.remove("hidden");
@@ -335,7 +363,9 @@
     const r = await api("/api/settings");
     if (!r.ok || !r.data.settings) return;
     settings = r.data.settings;
-    setDefaultVoice.value = settings.default_voice_id || (voices[0]?.id ?? "");
+    setVoiceEngine.value = settings.voice_engine || 'edge';
+    setVoiceSpeedup.value = settings.voicestudio_speedup ?? 1.25;
+    populateSettingsVoices();
     if (!bgDefaultsDirty) setDefaultBg.value = settings.default_background || "sequential";
     setCadenceCount.value = String(settings.queue_cadence_count ?? 3);
     setCadenceUnit.value = settings.queue_cadence_unit || "day";
@@ -346,9 +376,11 @@
   }
 
   function applyDefaultsToCreateScreen() {
-    if (!voiceOverridden && settings.default_voice_id && voices.some((v) => v.id === settings.default_voice_id)) {
-      selectedVoiceId = settings.default_voice_id;
-    }
+    const engine = settings.voice_engine || 'edge';
+    voices = populateVoiceOptions(voiceSelect, engine);
+    speedInput.disabled = engine === 'voicestudio';
+    const saved = engine === 'voicestudio' ? settings.voicestudio_voice_id : settings.default_voice_id;
+    if (!voiceOverridden || !voices.some(v => v.id === selectedVoiceId)) selectedVoiceId = voices.some(v => v.id === saved) ? saved : voices[0]?.id;
     voiceSelect.value = selectedVoiceId;
     updateCalibratedRate();
     if (!bgOverridden) {
@@ -379,7 +411,9 @@
       const r = await api("/api/settings", {
         method: "PUT",
         body: JSON.stringify({
-          default_voice_id: setDefaultVoice.value,
+          voice_engine: setVoiceEngine.value,
+          voicestudio_speedup: Number(setVoiceSpeedup.value),
+          ...(setVoiceEngine.value === 'edge' ? {default_voice_id: setDefaultVoice.value} : {voicestudio_voice_id: setDefaultVoice.value}),
           default_background: setDefaultBg.value,
           queue_cadence_count: Number(setCadenceCount.value) || 3,
           queue_cadence_unit: setCadenceUnit.value,
@@ -1186,6 +1220,7 @@
             <span class="${badgeCls}">${escapeHtml(j.status)}</span>
           </div>
           <div class="row" style="margin-top:0;">
+            ${j.status === 'failed' && j.voice_id?.startsWith('vs-') ? '<button type="button" class="secondary retry-edge-btn" data-id="' + escapeHtml(j.task_id) + '">Re-run with Edge TTS</button>' : ''}
             ${retryBtn}
             <button type="button" class="secondary toggle-logs-btn" data-id="${escapeHtml(j.task_id)}">${logsOpen ? "Hide logs" : "Show logs"}</button>
             ${deleteBtn}
@@ -1370,6 +1405,12 @@
         await loadJobs();
       });
     });
+    container.querySelectorAll('.retry-edge-btn').forEach(btn => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const r = await api('/api/render', {method:'POST', body:JSON.stringify({retry_edge_task:btn.dataset.id})});
+      if (!r.ok) { btn.textContent = r.data.error || 'Retry failed'; btn.disabled = false; return; }
+      await loadJobs();
+    }));
     container.querySelectorAll(".delete-task-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         openDeleteConfirm(btn.dataset.id);

@@ -14,6 +14,9 @@ export async function getSettings(db: D1Database): Promise<AppSettings> {
   const map: Record<string, string> = {};
   for (const r of results || []) map[r.key] = r.value;
   return {
+    voice_engine: map.voice_engine === "voicestudio" ? "voicestudio" : "edge",
+    voicestudio_voice_id: map.voicestudio_voice_id || DEFAULT_SETTINGS.voicestudio_voice_id,
+    voicestudio_speedup: Math.max(1, Math.min(2, Number(map.voicestudio_speedup) || 1.25)),
     default_voice_id: map.default_voice_id || DEFAULT_SETTINGS.default_voice_id,
     default_background: map.default_background || DEFAULT_SETTINGS.default_background,
     queue_cadence_count: Math.max(1, Math.min(100, Number(map.queue_cadence_count) || DEFAULT_SETTINGS.queue_cadence_count)),
@@ -27,6 +30,9 @@ export async function getSettings(db: D1Database): Promise<AppSettings> {
 export async function saveSettings(db: D1Database, patch: Partial<AppSettings>): Promise<AppSettings> {
   const now = new Date().toISOString();
   const entries: [string, string][] = [];
+  if (patch.voice_engine !== undefined) entries.push(["voice_engine", patch.voice_engine]);
+  if (patch.voicestudio_voice_id !== undefined) entries.push(["voicestudio_voice_id", patch.voicestudio_voice_id]);
+  if (patch.voicestudio_speedup !== undefined) entries.push(["voicestudio_speedup", String(patch.voicestudio_speedup)]);
   if (patch.default_voice_id !== undefined) entries.push(["default_voice_id", String(patch.default_voice_id)]);
   if (patch.default_background !== undefined) entries.push(["default_background", String(patch.default_background)]);
   if (patch.queue_cadence_count !== undefined) entries.push(["queue_cadence_count", String(Math.max(1, Math.min(100, Math.round(Number(patch.queue_cadence_count) || 3))))]);

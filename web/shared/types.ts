@@ -13,6 +13,9 @@ export type CadenceUnit = "day" | "week" | "month";
 
 export interface AppSettings {
   default_voice_id: string;
+  voicestudio_voice_id: string;
+  voice_engine: "edge" | "voicestudio";
+  voicestudio_speedup: number;
   default_background: string; // "sequential" or clip filename
   queue_cadence_count: number;
   queue_cadence_unit: CadenceUnit;
@@ -23,6 +26,9 @@ export interface AppSettings {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   default_voice_id: "en-US-AndrewMultilingualNeural",
+  voicestudio_voice_id: "vs-harper",
+  voice_engine: "edge",
+  voicestudio_speedup: 1.25,
   default_background: "sequential",
   queue_cadence_count: 3,
   queue_cadence_unit: "day",

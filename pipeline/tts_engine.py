@@ -422,7 +422,7 @@ class VoiceStudioCoupledSpeedupHook:
 
     @staticmethod
     def apply_coupled_speedup(result: TTSResult, factor: float = 1.25) -> TTSResult:
-        if factor <= 1.01:
+        if factor == 1.0:
             return result
         src = result.audio_path
         dst = os.path.join(os.path.dirname(src), "narration_fast.wav")
@@ -468,7 +468,10 @@ class VoiceStudioCoupledSpeedupHook:
         )
 
 
-def get_tts_engine(engine_name: str = "edge") -> EdgeTTSEngine:
+def get_tts_engine(engine_name: str = "edge") -> TTSEngine:
     if engine_name == "edge":
         return EdgeTTSEngine()
-    raise ValueError(f"Unsupported TTS engine in Phase 1: {engine_name}")
+    if engine_name == "voicestudio":
+        from voicestudio import VoiceStudioEngine
+        return VoiceStudioEngine()
+    raise ValueError(f"Unsupported TTS engine: {engine_name}")

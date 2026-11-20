@@ -502,6 +502,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         job_id: row.task_id,
         voice_id: row.voice_id,
         voice_speed: row.voice_speed,
+        ...JSON.parse(await getRuntimeState(db, undefined, `task_voice:${id}`, "{}")),
         target_wpm: row.target_wpm,
         background_mode: row.background_mode || "sequential",
         background_index: Number(row.background_index || 0),
@@ -685,6 +686,20 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return jsonResp({ error: "Unauthorized" }, 401);
   }
 
+  const voiceAsset = path.match(/^\/api\/voice-samples\/(voices\.json|[A-Za-z0-9_-]+\.mp3)$/);
+  if (voiceAsset && (request.method === 'GET' || request.method === 'HEAD')) {
+    const repo = env.GITHUB_REPO || 'motionssalt/storyforge';
+    const release = await fetch('https://api.github.com/repos/' + repo + '/releases/tags/voice-samples', {headers: ghHeaders(env)});
+    if (!release.ok) return jsonResp({error: 'Voice samples are not published yet.'}, 404);
+    const asset = (await release.json() as any).assets?.find((a: any) => a.name === voiceAsset[1]);
+    if (!asset) return jsonResp({error: 'Voice sample not found.'}, 404);
+    const upstream = await fetchReleaseMedia(env, asset, request.method, request.headers.get('Range'));
+    if (!upstream.ok && upstream.status !== 416) return jsonResp({error: 'Could not load the voice sample.'}, 502);
+    const headers = new Headers({'Content-Type': voiceAsset[1].endsWith('.json') ? 'application/json' : 'audio/mpeg'});
+    for (const key of ['Content-Range','Accept-Ranges','Content-Length']) if (upstream.headers.has(key)) headers.set(key, upstream.headers.get(key)!);
+    return new Response(upstream.body, {status: upstream.status, headers});
+  }
+
   // --- SF-006: Settings ---
   if (path === "/api/settings" && request.method === "GET") {
     const settings = await getSettings(db);
@@ -699,6 +714,16 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       return jsonResp({ error: "Invalid JSON body" }, 400);
     }
     const patch: Partial<AppSettings> = {};
+    if (body.voice_engine !== undefined) {
+      if (body.voice_engine !== 'edge' && body.voice_engine !== 'voicestudio') return jsonResp({error: 'Invalid voice engine.'}, 400);
+      patch.voice_engine = body.voice_engine;
+    }
+    if (body.voicestudio_speedup !== undefined) {
+      const speed = Number(body.voicestudio_speedup);
+      if (!(speed >= 1 && speed <= 2)) return jsonResp({error: 'VoiceStudio speed-up must be between 1 and 2.'}, 400);
+      patch.voicestudio_speedup = speed;
+    }
+    if (['vs-harper','vs-rowan','vs-morgan'].includes(body.voicestudio_voice_id)) patch.voicestudio_voice_id = body.voicestudio_voice_id;
     if (typeof body.default_voice_id === "string" && body.default_voice_id.trim()) {
       patch.default_voice_id = body.default_voice_id.trim();
     }
@@ -1231,6 +1256,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       return jsonResp({ error: "Invalid JSON body" }, 400);
     }
 
+    if (body.retry_edge_task !== undefined) {
+      if (typeof body.retry_edge_task !== 'string' || !body.retry_edge_task) return jsonResp({error: 'Invalid retry task.'}, 400);
+      const retry = await db.prepare("SELECT production_json FROM tasks WHERE task_id = ? AND status = 'failed' AND kind = 'render'").bind(body.retry_edge_task).first<any>();
+      const config = JSON.parse(await getRuntimeState(db, undefined, 'task_voice:' + body.retry_edge_task, "{}"));
+      if (!retry?.production_json || config.voice_engine !== 'voicestudio') return jsonResp({error: 'No failed VoiceStudio render to retry.'}, 409);
+      body.production_json = JSON.parse(retry.production_json);
+      body.publish_mode = 'queue';
+    }
     let prod = body.production_json;
     if (typeof prod === "string") {
       const repaired = repairPastedProductionText(prod);
@@ -1245,7 +1278,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
 
     const settings = await getSettings(db);
-    const voiceId = String(body.voice_id || settings.default_voice_id || "en-US-AndrewMultilingualNeural");
+    const voiceEngine = body.retry_edge_task ? 'edge' : settings.voice_engine;
+    const voiceId = String(body.retry_edge_task ? settings.default_voice_id : body.voice_id || (voiceEngine === 'voicestudio' ? settings.voicestudio_voice_id : settings.default_voice_id));
+    if (voiceEngine === 'voicestudio' && !['vs-harper','vs-rowan','vs-morgan'].includes(voiceId)) return jsonResp({error: 'Choose a VoiceStudio narrator.'}, 400);
+    if (voiceEngine === 'edge' && !/^[a-z]{2,3}-[A-Z]{2}-[A-Za-z0-9]+Neural$/.test(voiceId)) return jsonResp({error: 'Choose an Edge TTS narrator.'}, 400);
     const voiceSpeed = String(body.voice_speed || "+37%");
     const targetWpm = Number(body.target_wpm) || 250;
 
@@ -1309,6 +1345,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       )
       .run();
 
+    await setRuntimeState(db, `task_voice:${jobId}`, JSON.stringify({voice_engine: voiceEngine, voicestudio_speedup: settings.voicestudio_speedup}));
     const partStmts = (prod.parts || []).map((p: any) =>
       db
         .prepare(

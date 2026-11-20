@@ -1,40 +1,42 @@
-name: Calibrate Voices & Generate Samples
-
+name: Generate StoryForge voice samples
 on:
   workflow_dispatch:
-
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/generate-voice-samples.yml'
+      - 'pipeline/generate_voice_samples.py'
+      - 'pipeline/voicestudio.py'
+      - 'voices/voices.json'
 permissions:
   contents: write
-
+concurrency:
+  group: storyforge-voice-samples
+  cancel-in-progress: false
 jobs:
   samples:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 90
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-
-      - name: Install FFmpeg & edge-tts
+          python-version: '3.11'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub
+          key: storyforge-omni-3fc979d1-hub-v1
+      - run: |
+          if ! command -v ffmpeg; then sudo apt-get update && sudo apt-get install -y ffmpeg; fi
+          pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install 'omnivoice==0.2.1' 'transformers>=5.3,<6' 'edge-tts>=7.0.0'
+      - run: python pipeline/generate_voice_samples.py
+        env:
+          HF_HUB_DISABLE_XET: '1'
+      - name: Publish preview assets, then manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          sudo apt-get update && sudo apt-get install -y ffmpeg
-          pip install "edge-tts>=7.0.0"
-
-      - name: Calibrate voices and generate samples
-        run: python pipeline/calibrate_voices.py
-
-      - name: Commit samples and calibrated voices.json
-        run: |
-          git config user.name "storyforge-bot"
-          git config user.email "bot@motionssalt.local"
-          git add voices/voices.json web/public/voices.json web/public/samples/
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: calibrate voices and regenerate voice samples"
-            git push
-          else
-            echo "No changes to voice samples."
-          fi
+          gh release view voice-samples >/dev/null 2>&1 || gh release create voice-samples --title 'StoryForge voice samples' --notes 'Edge TTS and synthetic OmniVoice design previews (OmniVoice weights: CC BY-NC; no cloned voices).'
+          gh release upload voice-samples voice-sample-output/*.mp3 --clobber
+          gh release upload voice-samples voice-sample-output/voices.json --clobber

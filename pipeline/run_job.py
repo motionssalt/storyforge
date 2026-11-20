@@ -25,7 +25,7 @@ from compose import compose_scrolling_video, compress_final_video, probe_video_s
 from progress import TaskReporter
 from render_cards import render_scrolling_post_assets, resolve_avatar_data_uri
 from subtitles import generate_ass_subtitles
-from tts_engine import VoiceStudioCoupledSpeedupHook, get_tts_engine
+from tts_engine import get_tts_engine
 
 
 def migrate_legacy_production_json(doc: dict[str, Any]) -> dict[str, Any]:
@@ -209,11 +209,9 @@ def render_all_parts(
         tts_res = engine.synthesize_lines(
             part["lines"],
             voice_id=voice_id,
-            settings={"voice_speed": voice_speed},
+            settings={"voice_speed": voice_speed, "voicestudio_speedup": coupled_speedup_factor or 1.25},
             out_dir=os.path.join(part_dir, "tts"),
         )
-        if coupled_speedup_factor and tts_engine_name != "edge":
-            tts_res = VoiceStudioCoupledSpeedupHook.apply_coupled_speedup(tts_res, factor=coupled_speedup_factor)
         emit(
             "tts",
             f"{part_tag}: Narration & word timings ready ({tts_res.duration_sec:.1f}s, {len(tts_res.word_timings)} words)",
@@ -332,6 +330,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--local-json", help="Run locally from a production JSON file")
     parser.add_argument("--local-bg", help="Local MP4 background clip for offline testing")
+    parser.add_argument("--engine", choices=["edge", "voicestudio"], default="edge")
+    parser.add_argument("--voicestudio-speedup", type=float, default=1.25)
     parser.add_argument("--voice", default="en-US-AndrewMultilingualNeural")
     parser.add_argument("--speed", default="+34%")
     parser.add_argument("--out-dir", default="/tmp/sf_render")
@@ -343,6 +343,8 @@ def main() -> None:
             job_id="localtest",
             production_json=prod,
             voice_id=args.voice,
+            tts_engine_name=args.engine,
+            coupled_speedup_factor=args.voicestudio_speedup,
             voice_speed=args.speed,
             bg_index=0,
             work_dir=args.out_dir,
@@ -399,6 +401,8 @@ def main() -> None:
             job_id=job_id,
             production_json=prod_json,
             voice_id=job["voice_id"],
+            tts_engine_name=job.get("voice_engine") or "edge",
+            coupled_speedup_factor=job.get("voicestudio_speedup"),
             voice_speed=job.get("voice_speed", "+34%"),
             bg_index=int(job.get("background_index", 0)),
             work_dir=args.out_dir,
