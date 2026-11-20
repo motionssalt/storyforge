@@ -259,5 +259,86 @@
     "page": "https://commons.wikimedia.org/wiki/File:Peaceful_waterfall_(Unsplash).jpg",
     "license": "CC0",
     "file": "photo_scenery-waterfall-e36b1a81.jpg"
+  },
+  {
+    "style": "photo_person",
+    "hint": "male",
+    "thumb": "",
+    "url": "",
+    "page": "Bundled synthetic asset (AI-generated for StoryForge; no real person depicted)",
+    "license": "AI-generated synthetic (project-owned)",
+    "file": "photo_person-male-synth01.jpg"
+  },
+  {
+    "style": "photo_person",
+    "hint": "male",
+    "thumb": "",
+    "url": "",
+    "page": "Bundled synthetic asset (AI-generated for StoryForge; no real person depicted)",
+    "license": "AI-generated synthetic (project-owned)",
+    "file": "photo_person-male-synth02.jpg"
+  },
+  {
+    "style": "photo_person",
+    "hint": "male",
+    "thumb": "",
+    "url": "",
+    "page": "Bundled synthetic asset (AI-generated for StoryForge; no real person depicted)",
+    "license": "AI-generated synthetic (project-owned)",
+    "file": "photo_person-male-synth03.jpg"
+  },
+  {
+    "style": "photo_person",
+    "hint": "female",
+    "thumb": "",
+    "url": "",
+    "page": "Bundled synthetic asset (AI-generated for StoryForge; no real person depicted)",
+    "license": "AI-generated synthetic (project-owned)",
+    "file": "photo_person-female-synth01.jpg"
+  },
+  {
+    "style": "photo_person",
+    "hint": "female",
+    "thumb": "",
+    "url": "",
+    "page": "Bundled synthetic asset (AI-generated for StoryForge; no real person depicted)",
+    "license": "AI-generated synthetic (project-owned)",
+    "file": "photo_person-female-synth02.jpg"
+  },
+  {
+    "style": "photo_person",
+    "hint": "female",
+    "thumb": "",
+    "url": "",
+    "page": "Bundled synthetic asset (AI-generated for StoryForge; no real person depicted)",
+    "license": "AI-generated synthetic (project-owned)",
+    "file": "photo_person-female-synth03.jpg"
+  },
+  {
+    "style": "photo_object",
+    "hint": "camera",
+    "thumb": "",
+    "url": "",
+    "page": "Bundled synthetic asset (AI-generated for StoryForge; no real person depicted)",
+    "license": "AI-generated synthetic (project-owned)",
+    "file": "photo_object-camera-synth01.jpg"
+  },
+  {
+    "style": "photo_object",
+    "hint": "book",
+    "thumb": "",
+    "url": "",
+    "page": "Bundled synthetic asset (AI-generated for StoryForge; no real person depicted)",
+    "license": "AI-generated synthetic (project-owned)",
+    "file": "photo_object-book-synth01.jpg"
+  },
+  {
+    "style": "photo_object",
+    "hint": "guitar",
+    "thumb": "",
+    "url": "",
+    "page": "Bundled synthetic asset (AI-generated for StoryForge; no real person depicted)",
+    "license": "AI-generated synthetic (project-owned)",
+    "file": "photo_object-guitar-synth01.jpg"
   }
 ]
