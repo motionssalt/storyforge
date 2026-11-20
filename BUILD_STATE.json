@@ -430,7 +430,7 @@
   },
   "round6": {
     "status": "complete",
-    "updated_at": "2026-11-20T18:07:17Z",
+    "updated_at": "2026-11-20T18:12:53Z",
     "inspected_user_render": {
       "job_id": "sf_mwp1r544_c31aa8",
       "run_id": 44749389489,
@@ -476,6 +476,37 @@
         "run_id": 44774436370,
         "url": "https://github.com/motionssalt/storyforge/actions/runs/44774436370",
         "conclusion": "success"
+      },
+      "live_two_part_user_render": {
+        "job_id": "sf_mwp81h6o_b2b23e",
+        "run_id": 44778410554,
+        "url": "https://github.com/motionssalt/storyforge/actions/runs/44778410554",
+        "conclusion": "success",
+        "voice": "VoiceStudio / vs-rowan (1.25x)",
+        "part1": {
+          "chunks": 42,
+          "retries": 0,
+          "words": 545,
+          "max_unintended_gap_sec": 0.78,
+          "duration_sec": 144.45,
+          "speech_ac_db": -24.2,
+          "min_speech_window_db": -31.4
+        },
+        "part2": {
+          "chunks": 55,
+          "retries": 0,
+          "words": 661,
+          "max_unintended_gap_sec": 0.58,
+          "duration_sec": 172.69,
+          "speech_ac_db": -23.7,
+          "min_speech_window_db": -30.4
+        }
+      },
+      "fault_injection_and_two_part_ci": {
+        "run_id": 44789861793,
+        "url": "https://github.com/motionssalt/storyforge/actions/runs/44789861793",
+        "conclusion": "success",
+        "unit_tests_passed": "7/7 (including TestVoiceStudioFaultInjection)"
       }
     }
   }
