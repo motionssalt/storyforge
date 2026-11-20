@@ -7,7 +7,7 @@
       "name": "Andrew (US)",
       "gender": "male",
       "accent": "US",
-      "description": "Warm, natural storyteller \u2014 great all-rounder for drama.",
+      "description": "Warm, natural storyteller — great all-rounder for drama.",
       "base_wpm": 186.4,
       "default_rate": "+34%",
       "sample_neutral": "/samples/en-US-AndrewMultilingualNeural_neutral.mp3",
@@ -18,7 +18,7 @@
       "name": "Ava (US)",
       "gender": "female",
       "accent": "US",
-      "description": "Expressive and crisp \u2014 strong emotional range.",
+      "description": "Expressive and crisp — strong emotional range.",
       "base_wpm": 187.7,
       "default_rate": "+33%",
       "sample_neutral": "/samples/en-US-AvaMultilingualNeural_neutral.mp3",
@@ -29,7 +29,7 @@
       "name": "Brian (US)",
       "gender": "male",
       "accent": "US",
-      "description": "Deep, steady narrator \u2014 ideal for workplace & legal stories.",
+      "description": "Deep, steady narrator — ideal for workplace & legal stories.",
       "base_wpm": 183.8,
       "default_rate": "+36%",
       "sample_neutral": "/samples/en-US-BrianMultilingualNeural_neutral.mp3",
@@ -40,7 +40,7 @@
       "name": "Emma (US)",
       "gender": "female",
       "accent": "US",
-      "description": "Clear, conversational tone \u2014 relatable first-person POV.",
+      "description": "Clear, conversational tone — relatable first-person POV.",
       "base_wpm": 180.5,
       "default_rate": "+39%",
       "sample_neutral": "/samples/en-US-EmmaMultilingualNeural_neutral.mp3",
@@ -51,7 +51,7 @@
       "name": "Christopher (US)",
       "gender": "male",
       "accent": "US",
-      "description": "Authoritative and grounded \u2014 suits high-stakes twists.",
+      "description": "Authoritative and grounded — suits high-stakes twists.",
       "base_wpm": 183.6,
       "default_rate": "+36%",
       "sample_neutral": "/samples/en-US-ChristopherNeural_neutral.mp3",
@@ -62,7 +62,7 @@
       "name": "Eric (US)",
       "gender": "male",
       "accent": "US",
-      "description": "Everyday conversational cadence \u2014 natural Reddit feel.",
+      "description": "Everyday conversational cadence — natural Reddit feel.",
       "base_wpm": 181.3,
       "default_rate": "+38%",
       "sample_neutral": "/samples/en-US-EricNeural_neutral.mp3",
@@ -84,7 +84,7 @@
       "name": "Jenny (US)",
       "gender": "female",
       "accent": "US",
-      "description": "Friendly and engaging \u2014 great for family & neighbor drama.",
+      "description": "Friendly and engaging — great for family & neighbor drama.",
       "base_wpm": 183.6,
       "default_rate": "+36%",
       "sample_neutral": "/samples/en-US-JennyNeural_neutral.mp3",
@@ -95,7 +95,7 @@
       "name": "Aria (US)",
       "gender": "female",
       "accent": "US",
-      "description": "Dynamic and sharp \u2014 excels at confrontation lines.",
+      "description": "Dynamic and sharp — excels at confrontation lines.",
       "base_wpm": 174.6,
       "default_rate": "+43%",
       "sample_neutral": "/samples/en-US-AriaNeural_neutral.mp3",
@@ -106,7 +106,7 @@
       "name": "Steffan (US)",
       "gender": "male",
       "accent": "US",
-      "description": "Mature, measured delivery \u2014 strong for mystery thrillers.",
+      "description": "Mature, measured delivery — strong for mystery thrillers.",
       "base_wpm": 175.2,
       "default_rate": "+43%",
       "sample_neutral": "/samples/en-US-SteffanNeural_neutral.mp3",
@@ -117,7 +117,7 @@
       "name": "Ryan (UK)",
       "gender": "male",
       "accent": "UK",
-      "description": "Crisp British narrator \u2014 sharp timing for petty revenge.",
+      "description": "Crisp British narrator — sharp timing for petty revenge.",
       "base_wpm": 182.7,
       "default_rate": "+37%",
       "sample_neutral": "/samples/en-GB-RyanNeural_neutral.mp3",
@@ -150,7 +150,7 @@
       "name": "Thomas (UK)",
       "gender": "male",
       "accent": "UK",
-      "description": "Dry, calm British delivery \u2014 deadpan humor & tension.",
+      "description": "Dry, calm British delivery — deadpan humor & tension.",
       "base_wpm": 181.9,
       "default_rate": "+37%",
       "sample_neutral": "/samples/en-GB-ThomasNeural_neutral.mp3",
@@ -190,7 +190,7 @@
       "accent": "American",
       "seed": 1001,
       "instruct": "female, young adult, low pitch, american accent",
-      "descriptor": "Female \u00b7 Young adult \u00b7 Low pitch \u00b7 American"
+      "descriptor": "Female · Young adult · Low pitch · American"
     },
     {
       "id": "vs-rowan",
@@ -201,7 +201,7 @@
       "accent": "British",
       "seed": 1002,
       "instruct": "male, low pitch, british accent",
-      "descriptor": "Male \u00b7 Adult \u00b7 Low pitch \u00b7 British"
+      "descriptor": "Male · Adult · Low pitch · British"
     },
     {
       "id": "vs-morgan",
@@ -212,7 +212,7 @@
       "accent": "British",
       "seed": 1003,
       "instruct": "female, moderate pitch, british accent",
-      "descriptor": "Female \u00b7 Adult \u00b7 Moderate pitch \u00b7 British"
+      "descriptor": "Female · Adult · Moderate pitch · British"
     },
     {
       "id": "vs-marcus",
@@ -223,7 +223,7 @@
       "accent": "American",
       "seed": 1004,
       "instruct": "male, middle-aged, very low pitch, american accent",
-      "descriptor": "Male \u00b7 Middle-aged \u00b7 Very low pitch \u00b7 American"
+      "descriptor": "Male · Middle-aged · Very low pitch · American"
     },
     {
       "id": "vs-claire",
@@ -234,7 +234,7 @@
       "accent": "American",
       "seed": 1005,
       "instruct": "female, moderate pitch, american accent",
-      "descriptor": "Female \u00b7 Adult \u00b7 Moderate pitch \u00b7 American"
+      "descriptor": "Female · Adult · Moderate pitch · American"
     },
     {
       "id": "vs-liam",
@@ -245,7 +245,7 @@
       "accent": "American",
       "seed": 1006,
       "instruct": "male, young adult, moderate pitch, american accent",
-      "descriptor": "Male \u00b7 Young adult \u00b7 Moderate pitch \u00b7 American"
+      "descriptor": "Male · Young adult · Moderate pitch · American"
     },
     {
       "id": "vs-chloe",
@@ -256,7 +256,7 @@
       "accent": "American",
       "seed": 1007,
       "instruct": "female, young adult, high pitch, american accent",
-      "descriptor": "Female \u00b7 Young adult \u00b7 High pitch \u00b7 American"
+      "descriptor": "Female · Young adult · High pitch · American"
     },
     {
       "id": "vs-arthur",
@@ -267,7 +267,7 @@
       "accent": "British",
       "seed": 1008,
       "instruct": "male, elderly, low pitch, british accent",
-      "descriptor": "Male \u00b7 Elderly \u00b7 Low pitch \u00b7 British"
+      "descriptor": "Male · Elderly · Low pitch · British"
     },
     {
       "id": "vs-eleanor",
@@ -278,7 +278,7 @@
       "accent": "British",
       "seed": 1009,
       "instruct": "female, elderly, moderate pitch, british accent",
-      "descriptor": "Female \u00b7 Elderly \u00b7 Moderate pitch \u00b7 British"
+      "descriptor": "Female · Elderly · Moderate pitch · British"
     },
     {
       "id": "vs-devon",
@@ -289,7 +289,7 @@
       "accent": "American",
       "seed": 1010,
       "instruct": "male, young adult, low pitch, american accent",
-      "descriptor": "Male \u00b7 Young adult \u00b7 Low pitch \u00b7 American"
+      "descriptor": "Male · Young adult · Low pitch · American"
     },
     {
       "id": "vs-maya",
@@ -300,7 +300,7 @@
       "accent": "American",
       "seed": 1011,
       "instruct": "female, middle-aged, low pitch, american accent",
-      "descriptor": "Female \u00b7 Middle-aged \u00b7 Low pitch \u00b7 American"
+      "descriptor": "Female · Middle-aged · Low pitch · American"
     },
     {
       "id": "vs-caleb",
@@ -311,7 +311,7 @@
       "accent": "American",
       "seed": 1012,
       "instruct": "male, moderate pitch, american accent",
-      "descriptor": "Male \u00b7 Adult \u00b7 Moderate pitch \u00b7 American"
+      "descriptor": "Male · Adult · Moderate pitch · American"
     },
     {
       "id": "vs-nora",
@@ -322,7 +322,7 @@
       "accent": "American",
       "seed": 1013,
       "instruct": "female, middle-aged, moderate pitch, american accent",
-      "descriptor": "Female \u00b7 Middle-aged \u00b7 Moderate pitch \u00b7 American"
+      "descriptor": "Female · Middle-aged · Moderate pitch · American"
     },
     {
       "id": "vs-gideon",
@@ -333,7 +333,7 @@
       "accent": "American",
       "seed": 1014,
       "instruct": "male, middle-aged, low pitch, american accent",
-      "descriptor": "Male \u00b7 Middle-aged \u00b7 Low pitch \u00b7 American"
+      "descriptor": "Male · Middle-aged · Low pitch · American"
     },
     {
       "id": "vs-zoe",
@@ -344,7 +344,7 @@
       "accent": "American",
       "seed": 1015,
       "instruct": "female, young adult, very high pitch, american accent",
-      "descriptor": "Female \u00b7 Young adult \u00b7 Very high pitch \u00b7 American"
+      "descriptor": "Female · Young adult · Very high pitch · American"
     },
     {
       "id": "vs-victor",
@@ -355,7 +355,7 @@
       "accent": "British",
       "seed": 1016,
       "instruct": "male, middle-aged, very low pitch, british accent",
-      "descriptor": "Male \u00b7 Middle-aged \u00b7 Very low pitch \u00b7 British"
+      "descriptor": "Male · Middle-aged · Very low pitch · British"
     },
     {
       "id": "vs-sophie",
@@ -366,7 +366,7 @@
       "accent": "British",
       "seed": 1017,
       "instruct": "female, young adult, moderate pitch, british accent",
-      "descriptor": "Female \u00b7 Young adult \u00b7 Moderate pitch \u00b7 British"
+      "descriptor": "Female · Young adult · Moderate pitch · British"
     },
     {
       "id": "vs-alistair",
@@ -377,7 +377,7 @@
       "accent": "British",
       "seed": 1018,
       "instruct": "male, middle-aged, moderate pitch, british accent",
-      "descriptor": "Male \u00b7 Middle-aged \u00b7 Moderate pitch \u00b7 British"
+      "descriptor": "Male · Middle-aged · Moderate pitch · British"
     },
     {
       "id": "vs-tessa",
@@ -388,7 +388,7 @@
       "accent": "British",
       "seed": 1019,
       "instruct": "female, young adult, high pitch, british accent",
-      "descriptor": "Female \u00b7 Young adult \u00b7 High pitch \u00b7 British"
+      "descriptor": "Female · Young adult · High pitch · British"
     },
     {
       "id": "vs-julian",
@@ -399,7 +399,7 @@
       "accent": "British",
       "seed": 1020,
       "instruct": "male, young adult, moderate pitch, british accent",
-      "descriptor": "Male \u00b7 Young adult \u00b7 Moderate pitch \u00b7 British"
+      "descriptor": "Male · Young adult · Moderate pitch · British"
     },
     {
       "id": "vs-beatrice",
@@ -410,7 +410,7 @@
       "accent": "British",
       "seed": 1021,
       "instruct": "female, middle-aged, low pitch, british accent",
-      "descriptor": "Female \u00b7 Middle-aged \u00b7 Low pitch \u00b7 British"
+      "descriptor": "Female · Middle-aged · Low pitch · British"
     },
     {
       "id": "vs-owen",
@@ -421,7 +421,7 @@
       "accent": "Australian",
       "seed": 1022,
       "instruct": "male, low pitch, australian accent",
-      "descriptor": "Male \u00b7 Adult \u00b7 Low pitch \u00b7 Australian"
+      "descriptor": "Male · Adult · Low pitch · Australian"
     },
     {
       "id": "vs-ruby",
@@ -432,7 +432,7 @@
       "accent": "Australian",
       "seed": 1023,
       "instruct": "female, young adult, moderate pitch, australian accent",
-      "descriptor": "Female \u00b7 Young adult \u00b7 Moderate pitch \u00b7 Australian"
+      "descriptor": "Female · Young adult · Moderate pitch · Australian"
     },
     {
       "id": "vs-duncan",
@@ -443,7 +443,7 @@
       "accent": "Australian",
       "seed": 1024,
       "instruct": "male, middle-aged, moderate pitch, australian accent",
-      "descriptor": "Male \u00b7 Middle-aged \u00b7 Moderate pitch \u00b7 Australian"
+      "descriptor": "Male · Middle-aged · Moderate pitch · Australian"
     },
     {
       "id": "vs-sienna",
@@ -454,7 +454,7 @@
       "accent": "Australian",
       "seed": 1025,
       "instruct": "female, high pitch, australian accent",
-      "descriptor": "Female \u00b7 Adult \u00b7 High pitch \u00b7 Australian"
+      "descriptor": "Female · Adult · High pitch · Australian"
     },
     {
       "id": "vs-noah",
@@ -465,29 +465,7 @@
       "accent": "Canadian",
       "seed": 1026,
       "instruct": "male, young adult, low pitch, canadian accent",
-      "descriptor": "Male \u00b7 Young adult \u00b7 Low pitch \u00b7 Canadian"
-    },
-    {
-      "id": "vs-hannah",
-      "name": "Hannah",
-      "gender": "female",
-      "age": "adult",
-      "pitch": "moderate",
-      "accent": "Canadian",
-      "seed": 1027,
-      "instruct": "female, moderate pitch, canadian accent",
-      "descriptor": "Female \u00b7 Adult \u00b7 Moderate pitch \u00b7 Canadian"
-    },
-    {
-      "id": "vs-finn",
-      "name": "Finn",
-      "gender": "male",
-      "age": "middle-aged",
-      "pitch": "moderate",
-      "accent": "Canadian",
-      "seed": 1028,
-      "instruct": "male, middle-aged, moderate pitch, canadian accent",
-      "descriptor": "Male \u00b7 Middle-aged \u00b7 Moderate pitch \u00b7 Canadian"
+      "descriptor": "Male · Young adult · Low pitch · Canadian"
     },
     {
       "id": "vs-piper",
@@ -498,7 +476,7 @@
       "accent": "Canadian",
       "seed": 1029,
       "instruct": "female, young adult, high pitch, canadian accent",
-      "descriptor": "Female \u00b7 Young adult \u00b7 High pitch \u00b7 Canadian"
+      "descriptor": "Female · Young adult · High pitch · Canadian"
     },
     {
       "id": "vs-arjun",
@@ -509,7 +487,7 @@
       "accent": "Indian",
       "seed": 1030,
       "instruct": "male, low pitch, indian accent",
-      "descriptor": "Male \u00b7 Adult \u00b7 Low pitch \u00b7 Indian"
+      "descriptor": "Male · Adult · Low pitch · Indian"
     },
     {
       "id": "vs-priya",
@@ -520,7 +498,7 @@
       "accent": "Indian",
       "seed": 1031,
       "instruct": "female, young adult, moderate pitch, indian accent",
-      "descriptor": "Female \u00b7 Young adult \u00b7 Moderate pitch \u00b7 Indian"
+      "descriptor": "Female · Young adult · Moderate pitch · Indian"
     },
     {
       "id": "vs-rohan",
@@ -531,7 +509,7 @@
       "accent": "Indian",
       "seed": 1032,
       "instruct": "male, young adult, moderate pitch, indian accent",
-      "descriptor": "Male \u00b7 Young adult \u00b7 Moderate pitch \u00b7 Indian"
+      "descriptor": "Male · Young adult · Moderate pitch · Indian"
     },
     {
       "id": "vs-ananya",
@@ -542,7 +520,7 @@
       "accent": "Indian",
       "seed": 1033,
       "instruct": "female, middle-aged, low pitch, indian accent",
-      "descriptor": "Female \u00b7 Middle-aged \u00b7 Low pitch \u00b7 Indian"
+      "descriptor": "Female · Middle-aged · Low pitch · Indian"
     },
     {
       "id": "vs-walter",
@@ -553,7 +531,7 @@
       "accent": "American",
       "seed": 1034,
       "instruct": "male, elderly, very low pitch, american accent",
-      "descriptor": "Male \u00b7 Elderly \u00b7 Very low pitch \u00b7 American"
+      "descriptor": "Male · Elderly · Very low pitch · American"
     },
     {
       "id": "vs-evelyn",
@@ -564,18 +542,7 @@
       "accent": "American",
       "seed": 1035,
       "instruct": "female, elderly, low pitch, american accent",
-      "descriptor": "Female \u00b7 Elderly \u00b7 Low pitch \u00b7 American"
-    },
-    {
-      "id": "vs-miles",
-      "name": "Miles",
-      "gender": "male",
-      "age": "adult",
-      "pitch": "high",
-      "accent": "American",
-      "seed": 1036,
-      "instruct": "male, high pitch, american accent",
-      "descriptor": "Male \u00b7 Adult \u00b7 High pitch \u00b7 American"
+      "descriptor": "Female · Elderly · Low pitch · American"
     },
     {
       "id": "vs-iris",
@@ -586,7 +553,7 @@
       "accent": "British",
       "seed": 1037,
       "instruct": "female, very low pitch, british accent",
-      "descriptor": "Female \u00b7 Adult \u00b7 Very low pitch \u00b7 British"
+      "descriptor": "Female · Adult · Very low pitch · British"
     },
     {
       "id": "vs-nikolai",
@@ -597,7 +564,7 @@
       "accent": "Russian",
       "seed": 1038,
       "instruct": "male, low pitch, russian accent",
-      "descriptor": "Male \u00b7 Adult \u00b7 Low pitch \u00b7 Russian"
+      "descriptor": "Male · Adult · Low pitch · Russian"
     }
   ]
 }

@@ -6,6 +6,7 @@ import asyncio
 import difflib
 import json
 import os
+import random
 import re
 import subprocess
 import tempfile
@@ -25,7 +26,6 @@ def fetch_sample_config(default_text: str) -> tuple[str, float]:
     env_speed = os.environ.get("VOICESTUDIO_SPEEDUP", "").strip()
     worker_url = os.environ.get("WORKER_URL", "").strip()
     secret = os.environ.get("WORKER_INTERNAL_SECRET", "").strip()
-
     text = env_text or default_text
     speedup = 1.25
     if env_speed:
@@ -64,7 +64,6 @@ def quality_check_wav(wav_path: str, expected_text: str, whisper_model: Any | No
     rms = float(np.sqrt(np.mean(audio ** 2))) if audio.size else 0.0
     rms_db = float(20.0 * np.log10(max(rms, 1e-9)))
     peak = float(np.max(np.abs(audio))) if audio.size else 0.0
-
     qc_ratio = 1.0
     transcript = ""
     if whisper_model is not None:
@@ -73,7 +72,6 @@ def quality_check_wav(wav_path: str, expected_text: str, whisper_model: Any | No
         exp_w = _norm_words(expected_text)
         got_w = _norm_words(transcript)
         qc_ratio = difflib.SequenceMatcher(None, exp_w, got_w).ratio() if exp_w else 0.0
-
     ok = (4.0 <= dur <= 22.0) and (rms_db > -36.0) and (qc_ratio >= 0.72)
     return {
         "ok": ok,
@@ -83,6 +81,29 @@ def quality_check_wav(wav_path: str, expected_text: str, whisper_model: Any | No
         "whisper_ratio": round(qc_ratio, 3),
         "transcript": transcript,
     }
+
+
+async def _synth_edge_sample(sample_text: str, vid: str, rate: str, raw_mp3: Path) -> str:
+    attempts = [rate, rate, rate, rate, "+0%", "+0%"]
+    last_exc: Exception | None = None
+    for idx, eff_rate in enumerate(attempts):
+        if idx > 0:
+            await asyncio.sleep(min(16.0, 2 ** idx) + random.uniform(0.0, 1.0))
+        try:
+            comm = edge_tts.Communicate(sample_text, vid, rate=eff_rate)
+            audio_bytes = 0
+            with open(raw_mp3, "wb") as f:
+                async for chunk in comm.stream():
+                    if chunk.get("type") == "audio":
+                        f.write(chunk["data"])
+                        audio_bytes += len(chunk["data"])
+            if audio_bytes <= 0:
+                raise RuntimeError(f"Edge returned empty audio for {vid}")
+            return eff_rate
+        except Exception as exc:
+            last_exc = exc
+            print(f"[samples] Edge {vid} attempt {idx + 1}/{len(attempts)} (rate={eff_rate}) failed: {exc}", flush=True)
+    raise RuntimeError(f"Edge sample failed for {vid}: {last_exc}") from last_exc
 
 
 def main() -> None:
@@ -98,17 +119,53 @@ def main() -> None:
 
     edge_voices = voices_cfg.get("voices", [])
     vs_voices = voices_cfg.get("voicestudio_voices", [])
-    manifest: list[dict[str, Any]] = []
+    vs_manifest: list[dict[str, Any]] = []
+    edge_manifest: list[dict[str, Any]] = []
 
     whisper_model = None
     if os.environ.get("QC_WHISPER", "1") == "1" and os.environ.get("EDGE_ONLY") != "1":
         try:
             from faster_whisper import WhisperModel
+
             whisper_model = WhisperModel("base.en", device="cpu", compute_type="int8")
         except Exception as exc:
             print(f"[samples] warn: faster-whisper QC disabled ({exc})", flush=True)
 
     with tempfile.TemporaryDirectory() as work:
+        # Run fast Edge TTS samples first so transient issues fail fast before 33m VoiceStudio run
+        if os.environ.get("VS_ONLY") != "1":
+            for v in edge_voices:
+                vid = v["id"]
+                raw_mp3 = Path(work) / f"{vid}_raw.mp3"
+                mp3_name = f"{vid}.mp3"
+                used_rate = asyncio.run(
+                    _synth_edge_sample(sample_text, vid, v.get("default_rate", "+34%"), raw_mp3)
+                )
+                subprocess.run(
+                    [
+                        "ffmpeg", "-nostdin", "-loglevel", "error", "-y",
+                        "-i", str(raw_mp3),
+                        "-ar", "44100", "-ac", "1",
+                        "-c:a", "libmp3lame", "-b:a", "128k",
+                        str(output / mp3_name),
+                    ],
+                    check=True,
+                )
+                dur = round(probe_duration(str(output / mp3_name)), 2)
+                print(f"[samples] Edge {vid} (rate={used_rate}): dur={dur}s", flush=True)
+                edge_manifest.append(
+                    {
+                        "id": vid,
+                        "engine": "edge",
+                        "name": v["name"],
+                        "descriptor": f"{v['gender']} · {v['accent']}",
+                        "file": mp3_name,
+                        "sample_file": mp3_name,
+                        "duration_sec": dur,
+                    }
+                )
+                time.sleep(0.7)
+
         if os.environ.get("EDGE_ONLY") != "1":
             engine = VoiceStudioEngine()
             for v in vs_voices:
@@ -147,7 +204,7 @@ def main() -> None:
                     ],
                     check=True,
                 )
-                manifest.append(
+                vs_manifest.append(
                     {
                         "id": vid,
                         "engine": "voicestudio",
@@ -164,46 +221,7 @@ def main() -> None:
                     }
                 )
 
-        if os.environ.get("VS_ONLY") != "1":
-            for v in edge_voices:
-                vid = v["id"]
-                raw_mp3 = Path(work) / f"{vid}_raw.mp3"
-                mp3_name = f"{vid}.mp3"
-                for attempt in range(3):
-                    try:
-                        asyncio.run(
-                            edge_tts.Communicate(
-                                sample_text, vid, rate=v.get("default_rate", "+34%")
-                            ).save(str(raw_mp3))
-                        )
-                        break
-                    except Exception:
-                        if attempt == 2:
-                            raise
-                        time.sleep(2 ** attempt)
-                subprocess.run(
-                    [
-                        "ffmpeg", "-nostdin", "-loglevel", "error", "-y",
-                        "-i", str(raw_mp3),
-                        "-ar", "44100", "-ac", "1",
-                        "-c:a", "libmp3lame", "-b:a", "128k",
-                        str(output / mp3_name),
-                    ],
-                    check=True,
-                )
-                dur = round(probe_duration(str(output / mp3_name)), 2)
-                manifest.append(
-                    {
-                        "id": vid,
-                        "engine": "edge",
-                        "name": v["name"],
-                        "descriptor": f"{v['gender']} · {v['accent']}",
-                        "file": mp3_name,
-                        "sample_file": mp3_name,
-                        "duration_sec": dur,
-                    }
-                )
-
+    manifest = vs_manifest + edge_manifest
     (output / "voices.json").write_text(
         json.dumps(
             {
@@ -216,7 +234,7 @@ def main() -> None:
         + "\n",
         encoding="utf-8",
     )
-    print(f"[samples] Wrote {len(manifest)} samples and manifest.", flush=True)
+    print(f"[samples] Wrote {len(manifest)} samples ({len(vs_manifest)} VoiceStudio + {len(edge_manifest)} Edge) and manifest.", flush=True)
 
 
 if __name__ == "__main__":
