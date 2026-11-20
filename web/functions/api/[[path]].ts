@@ -1258,11 +1258,19 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
     if (body.retry_edge_task !== undefined) {
       if (typeof body.retry_edge_task !== 'string' || !body.retry_edge_task) return jsonResp({error: 'Invalid retry task.'}, 400);
-      const retry = await db.prepare("SELECT production_json FROM tasks WHERE task_id = ? AND status = 'failed' AND kind = 'render'").bind(body.retry_edge_task).first<any>();
+      const retry = await db.prepare(
+        "SELECT production_json, publish_mode, scheduled_for_utc, timezone, target_wpm, background_mode, background_clip, background_index FROM tasks WHERE task_id = ? AND status = 'failed' AND kind = 'render'"
+      ).bind(body.retry_edge_task).first<any>();
       const config = JSON.parse(await getRuntimeState(db, undefined, 'task_voice:' + body.retry_edge_task, "{}"));
       if (!retry?.production_json || config.voice_engine !== 'voicestudio') return jsonResp({error: 'No failed VoiceStudio render to retry.'}, 409);
       body.production_json = JSON.parse(retry.production_json);
-      body.publish_mode = 'queue';
+      body.publish_mode = retry.publish_mode || 'immediate';
+      if (retry.scheduled_for_utc) body.scheduled_for_utc = retry.scheduled_for_utc;
+      if (retry.timezone) body.timezone = retry.timezone;
+      if (retry.target_wpm) body.target_wpm = retry.target_wpm;
+      if (retry.background_mode) body.background_mode = retry.background_mode;
+      if (retry.background_clip) body.background_clip = retry.background_clip;
+      if (retry.background_index !== null && retry.background_index !== undefined) body.background_index = retry.background_index;
     }
     let prod = body.production_json;
     if (typeof prod === "string") {

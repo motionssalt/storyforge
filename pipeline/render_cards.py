@@ -102,9 +102,13 @@ def resolve_avatar_data_uri(
             rows = hinted or rows
             row = rows[int(digest, 16) % len(rows)]
             # Pin the asset, not merely the source. A provider outage must not change the poster.
-            for source in [row["thumb"], row["url"], os.path.join(pool_dir, row["file"])]:
+            sources = [row["thumb"], row["url"]]
+            if style == "photo_scenery":
+                sources.append(f"https://picsum.photos/seed/{digest[:16]}/256/256")
+            sources.append(os.path.join(pool_dir, row["file"]))
+            for source in sources:
                 try:
-                    if source.startswith(("https://thumb.wikimedia.org/", "https://upload.wikimedia.org/")):
+                    if source.startswith(("https://thumb.wikimedia.org/", "https://upload.wikimedia.org/", "https://picsum.photos/")):
                         req = urllib.request.Request(source, headers={"User-Agent": "StoryForge-Renderer/4.0 (github.com/motionssalt/storyforge)"})
                         with urllib.request.urlopen(req, timeout=4) as response:
                             data = response.read(12_000_001)

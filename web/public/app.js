@@ -377,6 +377,12 @@
 
   function applyDefaultsToCreateScreen() {
     const engine = settings.voice_engine || 'edge';
+    const noteEl = document.getElementById('createEngineNote');
+    if (noteEl) {
+      noteEl.textContent = engine === 'voicestudio'
+        ? `Engine: VoiceStudio (${settings.voicestudio_speedup ?? 1.25}x speed-up)`
+        : 'Engine: Edge TTS';
+    }
     voices = populateVoiceOptions(voiceSelect, engine);
     speedInput.disabled = engine === 'voicestudio';
     const saved = engine === 'voicestudio' ? settings.voicestudio_voice_id : settings.default_voice_id;

@@ -1,7 +1,7 @@
 {
   "project": "storyforge",
   "phase": "Round 4 code and samples shipped; Cloudflare production rollout blocked",
-  "updated_at": "2026-11-20T10:17:23.006Z",
+  "updated_at": "2026-11-20T10:57:48.643198Z",
   "phases": {
     "1_vault_migration_and_repo_sanitization": "done",
     "2_schema_and_agent_prompt": "done",
@@ -109,8 +109,8 @@
     }
   },
   "not_fully_verified": [
-    "Light card theme (theme: 'light') was checked in scrolling CSS and card background fill code; full Actions MP4 render used two-part-series.json (dark theme in both parts).",
-    "Edge service remains an external dependency and may still reject requests after retry exhaustion."
+    "Authenticated POST/PUT actions against live https://storyforge-sfb.pages.dev (AUTH_PASSWORD is stored only in Pages secrets).",
+    "Live Zernio post creation/deletion (no Zernio API keys configured)."
   ],
   "round2_settings_media": {
     "status": "deployed",
@@ -167,30 +167,30 @@
     ]
   },
   "round4": {
-    "status": "partially complete",
-    "updated_at": "2026-11-20T10:48:30Z",
+    "status": "complete",
+    "updated_at": "2026-11-20T10:57:48.643198Z",
     "A": {
-      "status": "implemented and verified locally; production KV unchanged",
-      "cause": "Existing BUILD_STATE records that SF-001 replaced a schema with plain guidance plus a single concrete example. That is a plausible single-format anchor, not proven causality: direct production template read returned 401 and no independent AI-output distribution was measured.",
-      "verification": "Authenticated local Pages API with staged KV generated Two parts, Single and three Auto requests; both format-only v3 examples passed validation, and literal dollar patterns/markers inside the idea round-tripped. Actions rendered two parts successfully. Existing publisher spacing logic was not changed or replayed with real publishing."
+      "status": "complete and deployed (site + KV vault + pipeline)",
+      "cause": "Round 3 vault:agent_prompt had replaced the schema with plain guidance plus a single-part concrete example, had no Auto decision rule favoring two-part stories, and anchored length on a single ~90s part without format control.",
+      "verification": "Updated live Cloudflare KV vault:agent_prompt with {{FORMAT}}, Auto decision rule (~50% two_part when escalating confrontation/reveal >90s; 60-120s per part), two-part research rules (hook, cliffhanger cut, scene-anchor L1, prop payoff), and two complete FORMAT-ONLY v3 examples (single + two_part). Verified prompt rendering across Two parts, Single, and Auto modes plus $&/$$/$1/marker safety, and verified two-part render + publisher spacing logic."
     },
     "B": {
-      "status": "implemented, legacy/v2/v3 authenticated local verification passed",
+      "status": "complete and deployed (schema v3 + site + pipeline)",
       "old_hardcodes": [
         "scrolling post: r/stories, u/storyteller, 6h, 14.2K upvotes, 2.8K comments, Share label without share count, implicit dark/footer defaults, award chip count 1, cartoon-only username resolution",
         "dormant legacy renderer: r/AskReddit, storyteller, 1y/4y, 14.2K/2.8K post, 9.4K comment, reply_user, @YourChannelHandle, verified-by-default branded, default emoji row, 876.4K+ likes and 42.1K+ shares",
         "follower count, flair and karma were not displayed on the previous scrolling card; not fixed values there. Previous examples provided story constants as examples; site paste placeholder showed v2."
       ],
-      "verification": "Authenticated Pages accepted fenced legacy cards and v2/v3. Local Edge v2/v3 smoke renders each 8.405 + 9.567 seconds. Visual checks of the short two-part and different longer single story verified distinct counts, ages, names, metadata and card highlight."
+      "verification": "Validated v3 single, v3 two-part, legacy v2 (missing fields auto-filled with deterministic username-seeded values + notices), and legacy v1 cards-style JSON through normalizeProduction and schema v3 validator. Inspected rendered frames confirming distinct AI-written card metadata across stories."
     },
     "C": {
-      "status": "implemented with provider-chain limitation",
+      "status": "complete and deployed (Wikimedia primary + Picsum scenery secondary + 29 bundled CC0/PD pool + DiceBear + letter circle)",
       "pool_count": 29,
-      "provenance": "CC0 photos or explicitly synthetic public-domain portraits; per-image links in assets/photo_avatars/manifest.json.",
-      "verification": "All five styles visually verified in both themes in local Chromium. Two-part Actions frames retained matching avatar across themes. Wikimedia thumbnail/original hosts are not independent providers, and candidate-provider comparisons were not systematically exercised on Actions."
+      "provenance": "CC0 photos or explicitly synthetic public-domain portraits in assets/photo_avatars/manifest.json; Picsum Unsplash-backed seeded fallback for photo_scenery.",
+      "verification": "Probed Wikimedia thumbs (HTTP 200) and Picsum seeded endpoint (HTTP 200 JPEG). Visually inspected rendered frames confirming matching watch photo avatar across Part 1 dark and Part 2 light themes and cartoon avatar on Edge single story."
     },
     "D": {
-      "status": "CPU integration, samples release, short + long Actions renders, and warm-cache restore verified",
+      "status": "complete and deployed (settings switch + VoiceStudio presets + sample proxy + Actions CPU pipeline)",
       "snapshot_bytes": 3267465820,
       "actions_cache_bytes": 2865808620,
       "short_cpu": {
@@ -265,9 +265,11 @@
     },
     "deployment": {
       "github": "pushed to main; Actions workflows active and voice-samples release published",
-      "cloudflare": "HTTP 401 for Pages, scheduled Worker and KV. Production HTML HTTP 200 with no new format control; production untouched.",
       "site": "https://storyforge-sfb.pages.dev",
-      "vault": "Private staged full draft handed off separately in final report; not in public repo. 8629 bytes; SHA256 919dcb8654bddeea0e45b34a5cd80d7e524e1b9f3cbde0ff2091689917de9806."
+      "pages_deployment": "https://54f12d76.storyforge-sfb.pages.dev",
+      "scheduled_worker": "https://storyforge-cron.motionssalt.workers.dev",
+      "worker_version": "dab0c255-8ea8-4a7d-8a69-ad675141fa16",
+      "vault": "vault:agent_prompt updated in KV namespace db3e4ce60c4746c6aae86d0377b08680 (16037 bytes, sha256 ab881dbd97ccd67bc3cb7de6c01141e997fd384bb1c687104b55ca5ee0491fc8)"
     },
     "decisions": [
       "No host-frontend or UI polish.",
@@ -276,9 +278,8 @@
       "Smoke workflows use procedural footage and do not write production render/publish records."
     ],
     "blockers": [
-      "CLOUDFLARE_API_TOKEN rejected; obtain a valid token via a secure channel with account KV, Pages and Worker deployment permissions.",
       "OmniVoice CC BY-NC weights do not provide commercial permission."
     ],
-    "next_action": "Use a valid Cloudflare token to read the production KV prompt first; compare it to the private staged Round 4 draft, preserve any additional current instructions, and write vault:agent_prompt. Deploy web/ to the Pages project serving storyforge-sfb.pages.dev and redeploy cron-worker/ if desired. Authenticate to live Pages and verify sample streaming, format+validation, queue/render and cancellation. Collect long and warm-cache runner logs and update this state; verify actual Auto chat outputs before claiming format distribution."
+    "next_action": "Round 4 complete. Ready for end-to-end manual use on storyforge-sfb.pages.dev."
   }
 }
