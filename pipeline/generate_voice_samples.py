@@ -2,6 +2,7 @@
 No cloned or real-person voices are ever published to the public Release."""
 from __future__ import annotations
 
+import argparse
 import asyncio
 import difflib
 import json
@@ -15,10 +16,6 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-import edge_tts
-
-from tts_engine import probe_duration
-from voicestudio import VoiceStudioEngine
 
 
 def fetch_sample_config(default_text: str) -> tuple[str, float]:
@@ -106,8 +103,70 @@ async def _synth_edge_sample(sample_text: str, vid: str, rate: str, raw_mp3: Pat
     raise RuntimeError(f"Edge sample failed for {vid}: {last_exc}") from last_exc
 
 
+def merge_shards(merge_dir: Path, output: Path) -> None:
+    voices_cfg = json.loads(Path("voices/voices.json").read_text(encoding="utf-8"))
+    vs_order = {v["id"]: idx for idx, v in enumerate(voices_cfg.get("voicestudio_voices", []))}
+    edge_order = {v["id"]: idx for idx, v in enumerate(voices_cfg.get("voices", []))}
+
+    shard_files = sorted(merge_dir.glob("shard_*.json"))
+    if not shard_files:
+        raise RuntimeError(f"No shard_*.json files found in {merge_dir}")
+
+    sample_text = ""
+    speedup = 1.25
+    vs_entries: list[dict[str, Any]] = []
+    edge_entries: list[dict[str, Any]] = []
+    for sf in shard_files:
+        data = json.loads(sf.read_text(encoding="utf-8"))
+        if not sample_text and data.get("sample_text"):
+            sample_text = data["sample_text"]
+        if data.get("voicestudio_speedup") is not None:
+            speedup = float(data["voicestudio_speedup"])
+        vs_entries.extend(data.get("vs_voices", []))
+        edge_entries.extend(data.get("edge_voices", []))
+
+    vs_entries.sort(key=lambda e: vs_order.get(e["id"], 9999))
+    edge_entries.sort(key=lambda e: edge_order.get(e["id"], 9999))
+    manifest = vs_entries + edge_entries
+    output.mkdir(parents=True, exist_ok=True)
+    (output / "voices.json").write_text(
+        json.dumps(
+            {
+                "sample_text": sample_text,
+                "voicestudio_speedup": speedup,
+                "voices": manifest,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    print(f"[samples] Merged {len(shard_files)} shards -> {len(manifest)} voices ({len(vs_entries)} VoiceStudio + {len(edge_entries)} Edge).", flush=True)
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--shard-index", type=int, default=0)
+    parser.add_argument("--shard-count", type=int, default=1)
+    parser.add_argument("--merge-dir", default="")
+    args = parser.parse_args()
+
     output = Path(os.environ.get("SAMPLE_OUTPUT", "voice-sample-output"))
+    if args.merge_dir:
+        merge_shards(Path(args.merge_dir), output)
+        return
+
+    shard_index = max(0, args.shard_index)
+    shard_count = max(1, args.shard_count)
+    if shard_index >= shard_count:
+        raise ValueError(f"shard-index {shard_index} >= shard-count {shard_count}")
+
+    import edge_tts
+    from tts_engine import probe_duration
+    from voicestudio import VoiceStudioEngine
+
+    globals()['edge_tts'] = edge_tts
+
     output.mkdir(parents=True, exist_ok=True)
     voices_cfg = json.loads(Path("voices/voices.json").read_text(encoding="utf-8"))
     default_text = voices_cfg.get("sample_text_default") or (
@@ -115,15 +174,16 @@ def main() -> None:
         "For three weeks everyone swore nobody had been in that apartment, until I checked the hallway camera and saw the door open."
     )
     sample_text, speedup = fetch_sample_config(default_text)
-    print(f"[samples] sample_text ({len(sample_text.split())} words), speedup={speedup:.2f}x", flush=True)
+    print(f"[samples] shard {shard_index}/{shard_count} | sample_text ({len(sample_text.split())} words), speedup={speedup:.2f}x", flush=True)
 
-    edge_voices = voices_cfg.get("voices", [])
-    vs_voices = voices_cfg.get("voicestudio_voices", [])
+    edge_voices = voices_cfg.get("voices", []) if shard_index == 0 else []
+    all_vs_voices = voices_cfg.get("voicestudio_voices", [])
+    vs_voices = [v for i, v in enumerate(all_vs_voices) if (i % shard_count) == shard_index]
     vs_manifest: list[dict[str, Any]] = []
     edge_manifest: list[dict[str, Any]] = []
 
     whisper_model = None
-    if os.environ.get("QC_WHISPER", "1") == "1" and os.environ.get("EDGE_ONLY") != "1":
+    if os.environ.get("QC_WHISPER", "1") == "1" and os.environ.get("EDGE_ONLY") != "1" and vs_voices:
         try:
             from faster_whisper import WhisperModel
 
@@ -132,8 +192,7 @@ def main() -> None:
             print(f"[samples] warn: faster-whisper QC disabled ({exc})", flush=True)
 
     with tempfile.TemporaryDirectory() as work:
-        # Run fast Edge TTS samples first so transient issues fail fast before 33m VoiceStudio run
-        if os.environ.get("VS_ONLY") != "1":
+        if os.environ.get("VS_ONLY") != "1" and edge_voices:
             for v in edge_voices:
                 vid = v["id"]
                 raw_mp3 = Path(work) / f"{vid}_raw.mp3"
@@ -166,7 +225,7 @@ def main() -> None:
                 )
                 time.sleep(0.7)
 
-        if os.environ.get("EDGE_ONLY") != "1":
+        if os.environ.get("EDGE_ONLY") != "1" and vs_voices:
             engine = VoiceStudioEngine()
             for v in vs_voices:
                 vid = v["id"]
@@ -221,20 +280,36 @@ def main() -> None:
                     }
                 )
 
-    manifest = vs_manifest + edge_manifest
-    (output / "voices.json").write_text(
-        json.dumps(
-            {
-                "sample_text": sample_text,
-                "voicestudio_speedup": speedup,
-                "voices": manifest,
-            },
-            indent=2,
+    if shard_count > 1:
+        (output / f"shard_{shard_index}.json").write_text(
+            json.dumps(
+                {
+                    "sample_text": sample_text,
+                    "voicestudio_speedup": speedup,
+                    "vs_voices": vs_manifest,
+                    "edge_voices": edge_manifest,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
         )
-        + "\n",
-        encoding="utf-8",
-    )
-    print(f"[samples] Wrote {len(manifest)} samples ({len(vs_manifest)} VoiceStudio + {len(edge_manifest)} Edge) and manifest.", flush=True)
+        print(f"[samples] Shard {shard_index} wrote {len(vs_manifest)} VoiceStudio + {len(edge_manifest)} Edge.", flush=True)
+    else:
+        manifest = vs_manifest + edge_manifest
+        (output / "voices.json").write_text(
+            json.dumps(
+                {
+                    "sample_text": sample_text,
+                    "voicestudio_speedup": speedup,
+                    "voices": manifest,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        print(f"[samples] Wrote {len(manifest)} samples ({len(vs_manifest)} VoiceStudio + {len(edge_manifest)} Edge) and manifest.", flush=True)
 
 
 if __name__ == "__main__":

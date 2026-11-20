@@ -26,12 +26,16 @@ permissions:
 
 concurrency:
   group: storyforge-voice-samples
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
-  samples:
+  shards:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 45
+    strategy:
+      fail-fast: true
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -47,13 +51,31 @@ jobs:
           if ! command -v ffmpeg; then sudo apt-get update && sudo apt-get install -y ffmpeg; fi
           pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
           pip install 'omnivoice==0.2.1' 'transformers>=5.3,<6' 'edge-tts>=7.0.0' 'faster-whisper>=1.0.3'
-      - run: python pipeline/generate_voice_samples.py
+      - run: python pipeline/generate_voice_samples.py --shard-index ${{ matrix.shard }} --shard-count 6
         env:
           HF_HUB_DISABLE_XET: '1'
           SAMPLE_TEXT: ${{ github.event.inputs.sample_text }}
           VOICESTUDIO_SPEEDUP: ${{ github.event.inputs.voicestudio_speedup }}
           WORKER_URL: ${{ secrets.WORKER_URL }}
           WORKER_INTERNAL_SECRET: ${{ secrets.WORKER_INTERNAL_SECRET }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voice-samples-shard-${{ matrix.shard }}
+          path: voice-sample-output/*
+          retention-days: 1
+
+  publish:
+    needs: shards
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: voice-samples-shard-*
+          path: voice-sample-output
+          merge-multiple: true
+      - run: python pipeline/generate_voice_samples.py --merge-dir voice-sample-output
       - name: Publish preview assets, then manifest
         env:
           GH_TOKEN: ${{ github.token }}
