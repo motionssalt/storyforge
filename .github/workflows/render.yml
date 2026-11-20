@@ -17,7 +17,7 @@ on:
         description: 'Optional repo fixture for CI smoke; uploads diagnostics only (no publishing)'
         type: choice
         default: 'none'
-        options: [none, edge_single, edge_two_part, voicestudio_two_part, voicestudio_long]
+        options: [none, edge_single, edge_two_part, voicestudio_single, voicestudio_two_part, voicestudio_long]
       test_background:
         description: "Use procedural test background (ONLY when backgrounds release is empty for smoke testing)"
         required: false
@@ -104,6 +104,8 @@ jobs:
           pip install -r pipeline/requirements.txt
           playwright install chromium
 
+      - name: Run pipeline audio-check & fault-injection tests
+        run: python pipeline/test_audio_checks.py
       - name: Run render pipeline
         env:
           JOB_ID: ${{ github.event.inputs.job_id }}
@@ -118,6 +120,7 @@ jobs:
           case "$FIXTURE" in
             edge_single) python pipeline/run_job.py --local-json schema/examples/single-video.json --engine edge --voice en-US-AndrewMultilingualNeural ;;
             edge_two_part) python pipeline/run_job.py --local-json schema/examples/smoke-two-part.json --engine edge --voice en-US-AndrewMultilingualNeural ;;
+            voicestudio_single) python pipeline/run_job.py --local-json schema/examples/single-video.json --engine voicestudio --voice vs-harper ;;
             voicestudio_two_part) python pipeline/run_job.py --local-json schema/examples/smoke-two-part.json --engine voicestudio --voice vs-harper ;;
             voicestudio_long) python pipeline/run_job.py --local-json schema/examples/two-part-series.json --engine voicestudio --voice vs-harper ;;
             none) python pipeline/run_job.py ;;

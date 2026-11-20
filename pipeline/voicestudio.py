@@ -11,13 +11,20 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from audio_checks import (
+    clean_omnivoice_wave,
+    normalize_text_for_retry,
+    split_long_segment_for_tts,
+    validate_tts_chunk,
+    verify_and_repair_chunk_timings,
+    verify_word_timing_coverage,
+)
 from tts_engine import (
     EdgeTTSEngine,
     LineTiming,
-    MARKER_PATTERN,
     TTSResult,
     VoiceStudioCoupledSpeedupHook,
-    align_whisper_words_to_script,
+    WordTiming,
     clean_spoken_text,
     probe_duration,
 )
@@ -50,6 +57,7 @@ NON_PAUSE_TAG_RE = re.compile(
 )
 
 PAUSE_GAP_SEC = 0.38
+INTER_SENTENCE_GAP_SEC = 0.14
 INTER_LINE_GAP_SEC = 0.08
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -88,7 +96,7 @@ PRESETS: dict[str, tuple[str, str, str]] = {
 def normalize_omnivoice_text(text: str) -> str:
     """Normalize inline StoryForge markers for OmniVoice (e.g. [laugh] -> [laughter])."""
     txt = LAUGH_ALIAS_RE.sub("[laughter]", str(text or ""))
-    # Canonicalize supported tag names to lowercase
+
     def _canon(m: re.Match[str]) -> str:
         tag = m.group(1).lower()
         if tag == "laugh":
@@ -136,6 +144,12 @@ def transcribe_clip_with_whisper(wav_path: str) -> str:
 
 class VoiceStudioEngine:
     model = None
+    _whisper_helper: EdgeTTSEngine | None = None
+
+    def _get_whisper_helper(self) -> EdgeTTSEngine:
+        if self._whisper_helper is None:
+            self._whisper_helper = EdgeTTSEngine()
+        return self._whisper_helper
 
     def prepare(self):
         import torch
@@ -228,7 +242,6 @@ class VoiceStudioEngine:
         pt_bytes = Path(local_pt).read_bytes()
         print(f"[voicestudio] built .pt clone prompt for {voice_id}/{slot} in {time.monotonic()-ts:.2f}s ({len(pt_bytes)} bytes)", flush=True)
 
-        # Cache .pt back into Worker KV so it is computed only once
         if worker_url and internal_secret:
             up_qs = urllib.parse.urlencode({
                 "voice_id": voice_id,
@@ -276,7 +289,6 @@ class VoiceStudioEngine:
         internal_secret = str((settings or {}).get("internal_secret") or os.environ.get("WORKER_INTERNAL_SECRET") or "").strip()
         num_step = int((settings or {}).get("num_step", 16))
 
-        # Pre-load or lazily load clone prompts per slot
         clone_prompts: dict[str, Any] = {}
         is_cloned = voice_spec.get("kind") == "cloned"
         slots_map = voice_spec.get("slots") if is_cloned else {}
@@ -300,10 +312,34 @@ class VoiceStudioEngine:
                 )
                 clone_prompts[slot] = prompt_obj
 
+        rate = 24000
+
+        def _to_16k_fast(wave_24k: np.ndarray) -> np.ndarray:
+            n_in = int(wave_24k.size)
+            n_out = max(1, int(round(n_in * 16000.0 / (float(rate) * factor))))
+            if n_in == 1:
+                return np.repeat(wave_24k, n_out).astype(np.float32)
+            x_old = np.arange(n_in, dtype=np.float64)
+            x_new = np.linspace(0.0, float(n_in - 1), n_out)
+            return np.interp(x_new, x_old, wave_24k).astype(np.float32)
+
         script: list[tuple[str, str]] = []
         parts: list[Any] = []
-        rate = 24000
+        raw_sample_cursor = 0
+        raw_pauses: list[tuple[int, int]] = []
+        chunk_records: list[dict[str, Any]] = []
+        total_chunks = 0
+        total_retries = 0
         started = time.monotonic()
+
+        def _append_silence(sec: float) -> None:
+            nonlocal raw_sample_cursor
+            sil_n = round(rate * sec)
+            if sil_n <= 0:
+                return
+            parts.append(np.zeros(sil_n, dtype=np.float32))
+            raw_pauses.append((raw_sample_cursor, raw_sample_cursor + sil_n))
+            raw_sample_cursor += sil_n
 
         for idx, line in enumerate(lines):
             if callable(cancel_check) and cancel_check():
@@ -312,7 +348,10 @@ class VoiceStudioEngine:
             lid = str(line["id"])
             raw_text = str(line["text"])
             clean, inline_markers = clean_spoken_text(raw_text)
-            script.extend((word, lid) for word in clean.split())
+            if not re.search(r"\w", clean) and "pause" not in inline_markers and "pause" not in [
+                str(m).strip().lower() for m in (line.get("markers") or [])
+            ]:
+                continue
 
             emotion = str(line.get("emotion") or "").strip().lower()
             explicit_markers = [str(m).strip().lower() for m in (line.get("markers") or []) if m]
@@ -322,7 +361,6 @@ class VoiceStudioEngine:
                 if m != "pause" and m not in inline_markers and ("laughter" if m == "laugh" else m) in OMNIVOICE_SOUND_TAGS
             ]
 
-            # Split at [pause] so [pause] becomes true raw silence; keep OmniVoice sound tags inline!
             segments = PAUSE_SPLIT_RE.split(raw_text)
             spoken_indices = [i for i, seg in enumerate(segments) if re.search(r"\w", clean_spoken_text(seg)[0])]
             last_spoken_idx = spoken_indices[-1] if spoken_indices else -1
@@ -342,65 +380,233 @@ class VoiceStudioEngine:
             ended_with_pause = False
             for seg_i, seg in enumerate(segments):
                 if seg_i > 0:
-                    parts.append(np.zeros(round(rate * PAUSE_GAP_SEC), dtype=np.float32))
+                    _append_silence(PAUSE_GAP_SEC)
                     ended_with_pause = True
                 seg_clean, _ = clean_spoken_text(seg)
                 if not re.search(r"\w", seg_clean):
                     continue
-                omni_text = normalize_omnivoice_text(seg)
-                if seg_i == last_spoken_idx and extra_sound_tags:
-                    omni_text = omni_text + " " + " ".join(f"[{t}]" for t in extra_sound_tags)
-                try:
-                    with torch.inference_mode():
-                        if active_seed is not None:
-                            torch.manual_seed(active_seed)
-                        gen_kwargs: dict[str, Any] = {"text": omni_text, "num_step": num_step}
-                        if active_prompt is not None:
-                            gen_kwargs["voice_clone_prompt"] = active_prompt
+
+                sub_chunks = split_long_segment_for_tts(seg, max_words=18)
+                for sub_i, sub_text in enumerate(sub_chunks):
+                    if sub_i > 0:
+                        _append_silence(INTER_SENTENCE_GAP_SEC)
+                        ended_with_pause = True
+
+                    sub_clean, sub_tags = clean_spoken_text(sub_text)
+                    sub_words = [(w, lid) for w in sub_clean.split()]
+                    if not sub_words:
+                        continue
+                    script.extend(sub_words)
+
+                    sub_with_tags = sub_text
+                    sub_tag_count = len([t for t in sub_tags if t != "pause"])
+                    if seg_i == last_spoken_idx and sub_i == len(sub_chunks) - 1 and extra_sound_tags:
+                        sub_with_tags = sub_with_tags + " " + " ".join(f"[{t}]" for t in extra_sound_tags)
+                        sub_tag_count += len(extra_sound_tags)
+
+                    chosen_wave = None
+                    chosen_16k = None
+                    chosen_whisper_words: list[tuple[str, float, float]] = []
+                    last_reason = "unknown"
+
+                    for attempt in range(3):
+                        if callable(cancel_check) and cancel_check():
+                            raise TaskCancelledError("Task was cancelled/deleted during VoiceStudio synthesis.")
+
+                        if attempt == 0:
+                            cand_text = normalize_omnivoice_text(sub_with_tags)
+                            cand_seed = active_seed
+                            cand_steps = num_step
+                        elif attempt == 1:
+                            cand_text = normalize_omnivoice_text(normalize_text_for_retry(sub_with_tags, level=1))
+                            cand_seed = (active_seed if active_seed is not None else 1001) + 101
+                            cand_steps = num_step
                         else:
-                            gen_kwargs["instruct"] = active_instruct
-                        wave = model.generate(**gen_kwargs)[0]
-                    wave = np.asarray(wave, dtype=np.float32).reshape(-1)
-                    if not wave.size or not np.isfinite(wave).all():
-                        raise ValueError("empty or invalid audio")
-                    parts.append(wave)
+                            cand_text = normalize_omnivoice_text(normalize_text_for_retry(sub_with_tags, level=2))
+                            cand_seed = (active_seed if active_seed is not None else 1001) + 202
+                            cand_steps = max(num_step, 20)
+
+                        if not re.search(r"\w", clean_spoken_text(cand_text)[0]):
+                            cand_text = normalize_omnivoice_text(sub_with_tags)
+
+                        try:
+                            with torch.inference_mode():
+                                if cand_seed is not None:
+                                    torch.manual_seed(int(cand_seed))
+                                gen_kwargs: dict[str, Any] = {"text": cand_text, "num_step": cand_steps}
+                                if active_prompt is not None:
+                                    gen_kwargs["voice_clone_prompt"] = active_prompt
+                                else:
+                                    gen_kwargs["instruct"] = active_instruct
+                                raw_wave = model.generate(**gen_kwargs)[0]
+                            raw_wave = np.asarray(raw_wave, dtype=np.float32).reshape(-1)
+                            if not raw_wave.size or not np.isfinite(raw_wave).all():
+                                raise ValueError("empty or non-finite audio")
+                        except Exception as exc:
+                            last_reason = f"synthesis error: {exc}"
+                            print(f"[voicestudio] chunk generation failed ({lid} try {attempt+1}/3): {last_reason}", flush=True)
+                            continue
+
+                        cleaned_wave, raw_dc = clean_omnivoice_wave(raw_wave, rate)
+                        wave_16k = _to_16k_fast(cleaned_wave) if align else None
+                        fast_dur = (cleaned_wave.size / float(rate)) / factor
+
+                        def _whisper_fn(arr16k=wave_16k, mdur=fast_dur) -> list[tuple[str, float, float]]:
+                            return self._get_whisper_helper()._transcribe_with_faster_whisper(
+                                arr16k,
+                                beam_size=1,
+                                condition_on_previous_text=False,
+                                pad_sec=0.25,
+                                max_dur_sec=mdur,
+                            )
+
+                        ok, reason, stats = validate_tts_chunk(
+                            cleaned_wave,
+                            rate,
+                            sub_clean,
+                            sound_tag_count=sub_tag_count,
+                            raw_dc_offset=raw_dc,
+                            is_whisper_emotion=(emotion == "whisper"),
+                            is_voicestudio=True,
+                            speedup_factor=factor,
+                            whisper_transcribe_fn=(_whisper_fn if align else None),
+                        )
+                        if ok:
+                            chosen_wave = cleaned_wave
+                            chosen_16k = wave_16k
+                            chosen_whisper_words = stats.get("whisper_words", [])
+                            total_chunks += 1
+                            total_retries += attempt
+                            break
+
+                        last_reason = reason
+                        print(
+                            f"[voicestudio] chunk validation failed ({lid} chunk #{total_chunks + 1} try {attempt+1}/3): {reason}",
+                            flush=True,
+                        )
+
+                    if chosen_wave is None:
+                        raise RuntimeError(
+                            f"OmniVoice synthesis failed validation at {lid} after 3 attempts: {last_reason}"
+                        )
+
+                    c_start_sample = raw_sample_cursor
+                    parts.append(chosen_wave)
+                    raw_sample_cursor += int(chosen_wave.size)
+                    c_end_sample = raw_sample_cursor
                     ended_with_pause = False
-                except Exception as exc:
-                    raise RuntimeError(f"OmniVoice synthesis failed at {lid}: {exc}") from exc
+
+                    chunk_records.append(
+                        {
+                            "lid": lid,
+                            "words": sub_words,
+                            "start_sample": c_start_sample,
+                            "end_sample": c_end_sample,
+                            "whisper_words": chosen_whisper_words,
+                            "wave_16k": chosen_16k,
+                        }
+                    )
 
             if "pause" in explicit_markers and "pause" not in inline_markers:
-                parts.append(np.zeros(round(rate * PAUSE_GAP_SEC), dtype=np.float32))
+                _append_silence(PAUSE_GAP_SEC)
                 ended_with_pause = True
             elif not ended_with_pause and idx < len(lines) - 1:
-                parts.append(np.zeros(round(rate * INTER_LINE_GAP_SEC), dtype=np.float32))
+                _append_silence(INTER_LINE_GAP_SEC)
 
         if not parts or not script:
             raise ValueError("No narration was generated.")
 
-        raw = os.path.join(out_dir, "omnivoice-24k.wav")
+        raw_path = os.path.join(out_dir, "omnivoice-24k.wav")
         natural = os.path.join(out_dir, "narration.wav")
-        sf.write(raw, np.concatenate(parts), rate, subtype="PCM_16")
+        sf.write(raw_path, np.concatenate(parts), rate, subtype="PCM_16")
         subprocess.run(
-            ["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-i", raw, "-ar", "44100", "-ac", "1", natural],
+            ["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-i", raw_path, "-ar", "44100", "-ac", "1", natural],
             check=True,
         )
+        raw_total_dur = raw_sample_cursor / float(rate)
         result = VoiceStudioCoupledSpeedupHook.apply_coupled_speedup(
-            TTSResult(natural, sum(a.size for a in parts) / rate),
+            TTSResult(natural, raw_total_dur),
             factor,
         )
         print(
             f"[voicestudio] generation and resampling {time.monotonic()-started:.2f}s; "
-            f"{len(script)} words, final {result.duration_sec:.2f}s",
+            f"{len(script)} words, {total_chunks} chunks ({total_retries} retries), final {result.duration_sec:.2f}s",
             flush=True,
         )
+
+        result.chunk_count = total_chunks
+        result.retry_count = total_retries
+
         if align:
-            started = time.monotonic()
-            words = EdgeTTSEngine()._transcribe_with_faster_whisper(result.audio_path)
-            result.word_timings = align_whisper_words_to_script(script, words, result.duration_sec)
+            started_align = time.monotonic()
+            scale = result.duration_sec / max(0.001, raw_total_dur)
+            realign_count = 0
+            fallback_count = 0
+            word_timings: list[WordTiming] = []
+
+            for rec in chunk_records:
+                c_start = (rec["start_sample"] / float(rate)) * scale
+                c_end = (rec["end_sample"] / float(rate)) * scale
+                c_dur = max(0.04 * len(rec["words"]), c_end - c_start)
+
+                def _realign_chunk(arr16k=rec["wave_16k"], mdur=c_dur) -> list[tuple[str, float, float]]:
+                    if arr16k is None:
+                        return []
+                    return self._get_whisper_helper()._transcribe_with_faster_whisper(
+                        arr16k,
+                        beam_size=5,
+                        condition_on_previous_text=False,
+                        pad_sec=0.25,
+                        max_dur_sec=mdur,
+                    )
+
+                aligned_local, status = verify_and_repair_chunk_timings(
+                    rec["words"],
+                    rec["whisper_words"],
+                    c_dur,
+                    re_align_fn=_realign_chunk,
+                    max_gap_sec=1.5,
+                )
+                if status == "realigned":
+                    realign_count += 1
+                elif status == "fallback_even":
+                    fallback_count += 1
+
+                for wt in aligned_local:
+                    word_timings.append(
+                        WordTiming(
+                            word=wt.word,
+                            start=round(c_start + wt.start, 3),
+                            end=round(c_start + wt.end, 3),
+                            line_id=wt.line_id,
+                        )
+                    )
+
+            intended_pauses = [
+                (round((s / float(rate)) * scale, 3), round((e / float(rate)) * scale, 3))
+                for s, e in raw_pauses
+            ]
+            cov = verify_word_timing_coverage(
+                word_timings,
+                script,
+                result.duration_sec,
+                intended_pauses,
+                max_gap_sec=1.5,
+            )
+
+            result.word_timings = word_timings
+            result.intended_pauses = intended_pauses
+            result.max_unintended_gap_sec = cov["max_unintended_gap_sec"]
             for word in result.word_timings:
                 if word.line_id not in result.line_timings:
                     result.line_timings[word.line_id] = LineTiming(word.line_id, word.start, word.end)
                 else:
                     result.line_timings[word.line_id].end = word.end
-            print(f"[voicestudio] final-audio alignment {time.monotonic()-started:.2f}s", flush=True)
+            print(
+                f"[voicestudio] chunk-anchored alignment {time.monotonic()-started_align:.2f}s; "
+                f"Voice check: OK, {total_chunks} chunks, {total_retries} retries "
+                f"(realigned={realign_count}, even_fallback={fallback_count}, max_gap={cov['max_unintended_gap_sec']:.2f}s)",
+                flush=True,
+            )
+
         return result

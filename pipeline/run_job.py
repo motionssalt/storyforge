@@ -25,7 +25,8 @@ from compose import compose_scrolling_video, compress_final_video, probe_video_s
 from progress import TaskReporter
 from render_cards import render_scrolling_post_assets, resolve_avatar_data_uri
 from subtitles import generate_ass_subtitles
-from tts_engine import get_tts_engine
+from audio_checks import verify_final_video_audio, verify_word_timing_coverage
+from tts_engine import clean_spoken_text, get_tts_engine
 
 
 def migrate_legacy_production_json(doc: dict[str, Any]) -> dict[str, Any]:
@@ -228,6 +229,11 @@ def render_all_parts(
         )
         emit(
             "tts",
+            f"{part_tag}: Voice check: OK, {tts_res.chunk_count} chunks, {tts_res.retry_count} retries",
+            part_base + part_span * 0.17,
+        )
+        emit(
+            "tts",
             f"{part_tag}: Narration & word timings ready ({tts_res.duration_sec:.1f}s, {len(tts_res.word_timings)} words)",
             part_base + part_span * 0.18,
         )
@@ -247,6 +253,24 @@ def render_all_parts(
         emit("subtitles", f"{part_tag}: Generating ASS word subtitles...", part_base + part_span * 0.29)
         ass_path = os.path.join(part_dir, "subtitles.ass")
         generate_ass_subtitles(tts_res.word_timings, ass_path, font_name="Lilita One")
+        expected_script = [
+            (w, str(ln["id"]))
+            for ln in part["lines"]
+            for w in clean_spoken_text(str(ln.get("text", "")))[0].split()
+        ]
+        cov_stats = verify_word_timing_coverage(
+            tts_res.word_timings,
+            expected_script,
+            tts_res.duration_sec,
+            tts_res.intended_pauses,
+            max_gap_sec=1.5,
+        )
+        emit(
+            "subtitles",
+            f"{part_tag}: Timing check: OK, {cov_stats['word_count']} words covered "
+            f"(max gap {cov_stats['max_unintended_gap_sec']:.2f}s)",
+            part_base + part_span * 0.305,
+        )
         emit("subtitles", f"{part_tag}: Subtitles generated.", part_base + part_span * 0.31)
 
         # 4. Background footage selection & prep (31..43% of part span)
@@ -320,7 +344,21 @@ def render_all_parts(
             "compress",
             f"{part_tag}: Compressed {before_mb:.1f} MB ({c_stats['before_kbps']:.0f} kbps) -> "
             f"{after_mb:.1f} MB ({c_stats['after_kbps']:.0f} kbps)",
-            part_base + part_span * 0.99,
+            part_base + part_span * 0.985,
+        )
+        fa_stats = verify_final_video_audio(
+            out_mp4,
+            tts_res.word_timings,
+            part["lines"],
+            tts_res.intended_pauses,
+            tts_res.duration_sec,
+            part_tag=part_tag,
+        )
+        emit(
+            "compress",
+            f"{part_tag}: Final audio check: OK (dur={fa_stats['duration_sec']}s, "
+            f"speech={fa_stats['avg_speech_ac_db']} dBFS, min_window={fa_stats['min_speech_window_db']} dBFS)",
+            part_base + part_span * 0.995,
         )
 
         rendered_parts.append(

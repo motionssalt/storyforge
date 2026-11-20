@@ -12,14 +12,24 @@ Fixed interface:
 from __future__ import annotations
 
 import asyncio
-import difflib
 import inspect
-import random
 import os
+import random
 import re
 import subprocess
 from dataclasses import dataclass, field
 from typing import Any, Protocol
+
+from audio_checks import (
+    LineTiming,
+    WordTiming,
+    align_whisper_words_to_chunk,
+    load_wav_float32,
+    normalize_text_for_retry,
+    validate_tts_chunk,
+    verify_and_repair_chunk_timings,
+    verify_word_timing_coverage,
+)
 
 
 MARKER_PATTERN = re.compile(
@@ -43,26 +53,15 @@ EMOTION_EDGE_TWEAKS: dict[str, tuple[int, int]] = {
 
 
 @dataclass
-class WordTiming:
-    word: str
-    start: float
-    end: float
-    line_id: str
-
-
-@dataclass
-class LineTiming:
-    line_id: str
-    start: float
-    end: float
-
-
-@dataclass
 class TTSResult:
     audio_path: str
     duration_sec: float
     word_timings: list[WordTiming] = field(default_factory=list)
     line_timings: dict[str, LineTiming] = field(default_factory=dict)
+    chunk_count: int = 0
+    retry_count: int = 0
+    intended_pauses: list[tuple[float, float]] = field(default_factory=list)
+    max_unintended_gap_sec: float = 0.0
 
 
 class TTSEngine(Protocol):
@@ -140,10 +139,6 @@ def clean_spoken_text(text: str) -> tuple[str, list[str]]:
     return cleaned, found_markers
 
 
-def _norm_word(w: str) -> str:
-    return re.sub(r"[^a-z0-9']", "", w.lower())
-
-
 def align_whisper_words_to_script(
     script_words: list[tuple[str, str]],
     whisper_words: list[tuple[str, float, float]],
@@ -154,61 +149,72 @@ def align_whisper_words_to_script(
         return []
     if not whisper_words:
         raise RuntimeError("No word boundaries or aligned transcription available; refusing to fabricate caption timings.")
-
-    s_norm = [_norm_word(w) for w, _ in script_words]
-    w_norm = [_norm_word(w) for w, _, _ in whisper_words]
-
-    sm = difflib.SequenceMatcher(None, s_norm, w_norm, autojunk=False)
-    assigned: list[tuple[float, float] | None] = [None] * len(script_words)
-
-    for tag, i1, i2, j1, j2 in sm.get_opcodes():
-        if tag == "equal":
-            for k in range(i2 - i1):
-                _, st, en = whisper_words[j1 + k]
-                assigned[i1 + k] = (st, max(st + 0.04, en))
-        elif tag == "replace":
-            span_start = whisper_words[j1][1]
-            span_end = whisper_words[j2 - 1][2]
-            cnt = max(1, i2 - i1)
-            step = max(0.04, (span_end - span_start) / cnt)
-            for k in range(cnt):
-                st = span_start + k * step
-                assigned[i1 + k] = (st, st + step)
-
-    # Interpolate any remaining gaps smoothly between neighbors
-    n = len(script_words)
-    i = 0
-    while i < n:
-        if assigned[i] is not None:
-            i += 1
-            continue
-        gap_start_idx = i
-        while i < n and assigned[i] is None:
-            i += 1
-        gap_end_idx = i  # exclusive
-
-        prev_t = assigned[gap_start_idx - 1][1] if gap_start_idx > 0 else 0.0
-        next_t = assigned[gap_end_idx][0] if gap_end_idx < n else total_duration
-        if next_t <= prev_t:
-            next_t = prev_t + 0.08 * (gap_end_idx - gap_start_idx)
-        step = (next_t - prev_t) / (gap_end_idx - gap_start_idx)
-        for k in range(gap_start_idx, gap_end_idx):
-            st = prev_t + (k - gap_start_idx) * step
-            assigned[k] = (st, st + step)
-
-    result: list[WordTiming] = []
-    last_end = 0.0
-    for idx, (word_str, lid) in enumerate(script_words):
-        st, en = assigned[idx]  # type: ignore[misc]
-        st = max(last_end, st)
-        en = max(st + 0.04, en)
-        last_end = en
-        result.append(WordTiming(word=word_str, start=round(st, 3), end=round(en, 3), line_id=lid))
-    return result
+    return align_whisper_words_to_chunk(script_words, whisper_words, total_duration)
 
 
 class EdgeTTSEngine:
     """Phase 1 TTS engine using Microsoft Edge TTS + WordBoundary / faster-whisper fallback."""
+
+    def __init__(self) -> None:
+        self._whisper_model: Any = None
+
+    def _get_whisper_model(self) -> Any:
+        if self._whisper_model is None:
+            try:
+                from faster_whisper import WhisperModel
+            except ImportError as exc:
+                raise RuntimeError("faster-whisper is not installed.") from exc
+            self._whisper_model = WhisperModel("base.en", device="cpu", compute_type="int8")
+        return self._whisper_model
+
+    def _transcribe_with_faster_whisper(
+        self,
+        audio_input: Any,
+        *,
+        beam_size: int = 1,
+        condition_on_previous_text: bool = False,
+        pad_sec: float = 0.0,
+        max_dur_sec: float | None = None,
+    ) -> list[tuple[str, float, float]]:
+        model = self._get_whisper_model()
+        transcribe_target = audio_input
+        if pad_sec > 0.0 and not isinstance(audio_input, str):
+            import numpy as np
+
+            arr = np.asarray(audio_input, dtype=np.float32).reshape(-1)
+            pad_n = int(round(pad_sec * 16000))
+            if pad_n > 0:
+                zeros = np.zeros(pad_n, dtype=np.float32)
+                transcribe_target = np.concatenate([zeros, arr, zeros])
+
+        segments, _ = model.transcribe(
+            transcribe_target,
+            word_timestamps=True,
+            language="en",
+            vad_filter=False,
+            beam_size=beam_size,
+            condition_on_previous_text=condition_on_previous_text,
+        )
+        out: list[tuple[str, float, float]] = []
+        for seg in segments:
+            if not seg.words:
+                continue
+            for w in seg.words:
+                txt = (w.word or "").strip()
+                if not txt:
+                    continue
+                st = float(w.start) - pad_sec
+                en = float(w.end) - pad_sec
+                if max_dur_sec is not None:
+                    if en <= 0.0 or st >= max_dur_sec:
+                        continue
+                    st = max(0.0, min(max_dur_sec - 0.02, st))
+                    en = max(st + 0.02, min(max_dur_sec, en))
+                else:
+                    st = max(0.0, st)
+                    en = max(st + 0.02, en)
+                out.append((txt, st, en))
+        return out
 
     def synthesize_lines(
         self,
@@ -234,11 +240,14 @@ class EdgeTTSEngine:
 
         wav_segments: list[str] = []
         line_timings: dict[str, LineTiming] = {}
-        raw_word_timings: list[WordTiming] = []
         script_words: list[tuple[str, str]] = []
-        line_word_ranges: list[tuple[str, float, float, list[str]]] = []
+        chunk_records: list[dict[str, Any]] = []
+        intended_pauses: list[tuple[float, float]] = []
 
+        total_chunks = 0
+        total_retries = 0
         cursor = 0.0
+
         for idx, line in enumerate(lines):
             lid = str(line["id"])
             emotion = str(line.get("emotion", "calm")).lower()
@@ -256,84 +265,120 @@ class EdgeTTSEngine:
             wav_path = os.path.join(out_dir, f"line_{idx:03d}_{lid}.wav")
 
             line_wb: list[tuple[str, float, float]] = []
-            last_exc: Exception | None = None
-            attempts = []
-            if supports_boundary_kw:
-                attempts.append({"rate": eff_rate, "boundary": "WordBoundary"})
-            attempts.extend({"rate": eff_rate} for _ in range(5))
+            line_dur = 0.0
+            val_ok = False
+            last_val_reason = "unknown"
 
-            for attempt_idx, kwargs in enumerate(attempts):
-                if attempt_idx:
-                    await asyncio.sleep(min(16, 2 ** attempt_idx) + random.uniform(0, 1))
-                line_wb = []
-                try:
-                    comm = edge_tts.Communicate(clean_text, voice_id, **kwargs)
-                    audio_bytes = 0
-                    with open(mp3_path, "wb") as f:
-                        async for chunk in comm.stream():
-                            ctype = chunk.get("type")
-                            if ctype == "audio":
-                                f.write(chunk["data"])
-                                audio_bytes += len(chunk["data"])
-                            elif ctype == "WordBoundary":
-                                offset_s = float(chunk["offset"]) / 10_000_000.0
-                                dur_s = float(chunk["duration"]) / 10_000_000.0
-                                w_txt = str(chunk.get("text", "")).strip()
-                                if w_txt:
-                                    line_wb.append((w_txt, offset_s, offset_s + dur_s))
-                    if audio_bytes <= 0:
-                        raise RuntimeError(f"Edge returned empty audio for {lid}")
-                    last_exc = None
+            for val_try in range(3):
+                if val_try == 0:
+                    cand_text = clean_text
+                    cand_rate = eff_rate
+                elif val_try == 1:
+                    cand_text = normalize_text_for_retry(clean_text, level=1) or clean_text
+                    cand_rate = eff_rate
+                else:
+                    cand_text = normalize_text_for_retry(clean_text, level=2) or clean_text
+                    cand_rate = "+0%"
+
+                last_exc: Exception | None = None
+                attempts = []
+                if supports_boundary_kw:
+                    attempts.append({"rate": cand_rate, "boundary": "WordBoundary"})
+                attempts.extend({"rate": cand_rate} for _ in range(5))
+
+                for attempt_idx, kwargs in enumerate(attempts):
+                    if attempt_idx:
+                        await asyncio.sleep(min(16, 2 ** attempt_idx) + random.uniform(0, 1))
+                    line_wb = []
+                    try:
+                        comm = edge_tts.Communicate(cand_text, voice_id, **kwargs)
+                        audio_bytes = 0
+                        with open(mp3_path, "wb") as f:
+                            async for chunk in comm.stream():
+                                ctype = chunk.get("type")
+                                if ctype == "audio":
+                                    f.write(chunk["data"])
+                                    audio_bytes += len(chunk["data"])
+                                elif ctype == "WordBoundary":
+                                    offset_s = float(chunk["offset"]) / 10_000_000.0
+                                    dur_s = float(chunk["duration"]) / 10_000_000.0
+                                    w_txt = str(chunk.get("text", "")).strip()
+                                    if w_txt:
+                                        line_wb.append((w_txt, offset_s, offset_s + dur_s))
+                        if audio_bytes <= 0:
+                            raise RuntimeError(f"Edge returned empty audio for {lid}")
+                        last_exc = None
+                        break
+                    except Exception as exc:
+                        last_exc = exc
+                        print(f"[tts] Attempt {attempt_idx+1} failed for {lid} ({kwargs}): {exc}")
+
+                if last_exc is not None:
+                    raise RuntimeError(f"Edge TTS failed for {lid} after {len(attempts)} attempts: {last_exc}") from last_exc
+                await asyncio.sleep(0.4)
+
+                # Convert to standard 44.1kHz mono PCM WAV
+                subprocess.run(
+                    [
+                        "ffmpeg",
+                        "-y",
+                        "-i",
+                        mp3_path,
+                        "-ar",
+                        "44100",
+                        "-ac",
+                        "1",
+                        "-c:a",
+                        "pcm_s16le",
+                        wav_path,
+                    ],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                samples, sr = load_wav_float32(wav_path)
+                val_ok, last_val_reason, stats = validate_tts_chunk(
+                    samples,
+                    sr,
+                    clean_text,
+                    sound_tag_count=0,
+                    is_whisper_emotion=(emotion == "whisper"),
+                    is_voicestudio=False,
+                    speedup_factor=1.0,
+                )
+                if val_ok:
+                    line_dur = stats["duration_sec"]
+                    total_chunks += 1
+                    total_retries += val_try
                     break
-                except Exception as exc:
-                    last_exc = exc
-                    print(f"[tts] Attempt {attempt_idx+1} failed for {lid} ({kwargs}): {exc}")
+                print(
+                    f"[tts] Edge chunk validation failed ({lid} try {val_try + 1}/3): {last_val_reason}",
+                    flush=True,
+                )
 
-            if last_exc is not None:
-                raise RuntimeError(f"Edge TTS failed for {lid} after {len(attempts)} attempts: {last_exc}") from last_exc
-            await asyncio.sleep(0.6)
+            if not val_ok:
+                raise RuntimeError(
+                    f"Edge TTS chunk failed validation at {lid} after 3 attempts: {last_val_reason}"
+                )
 
-            # Convert to standard 44.1kHz mono PCM WAV
-            subprocess.run(
-                [
-                    "ffmpeg",
-                    "-y",
-                    "-i",
-                    mp3_path,
-                    "-ar",
-                    "44100",
-                    "-ac",
-                    "1",
-                    "-c:a",
-                    "pcm_s16le",
-                    wav_path,
-                ],
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            line_dur = probe_duration(wav_path)
             wav_segments.append(wav_path)
-
             line_start = cursor
             line_end = cursor + line_dur
             line_timings[lid] = LineTiming(line_id=lid, start=round(line_start, 3), end=round(line_end, 3))
 
-            words_in_line = clean_text.split()
-            for w in words_in_line:
-                script_words.append((w, lid))
-            line_word_ranges.append((lid, line_start, line_end, words_in_line))
-
-            for w_txt, wst, wen in line_wb:
-                raw_word_timings.append(
-                    WordTiming(
-                        word=w_txt,
-                        start=round(cursor + wst, 3),
-                        end=round(cursor + wen, 3),
-                        line_id=lid,
-                    )
-                )
-
+            words_in_line = [(w, lid) for w in clean_text.split()]
+            script_words.extend(words_in_line)
+            chunk_records.append(
+                {
+                    "lid": lid,
+                    "wav_path": wav_path,
+                    "start": line_start,
+                    "end": line_end,
+                    "dur": line_dur,
+                    "words": words_in_line,
+                    "wb": list(line_wb),
+                }
+            )
             cursor = line_end
 
             # Optional pause/breath after line
@@ -349,6 +394,7 @@ class EdgeTTSEngine:
                 sil_path = os.path.join(out_dir, f"sil_{idx:03d}.wav")
                 make_silence_wav(sil_path, gap_sec, sample_rate=44100)
                 wav_segments.append(sil_path)
+                intended_pauses.append((round(cursor, 3), round(cursor + gap_sec, 3)))
                 cursor += gap_sec
 
         # Concatenate all WAVs
@@ -378,51 +424,79 @@ class EdgeTTSEngine:
         )
         total_dur = probe_duration(final_wav)
 
-        # Decide whether Edge WordBoundary gave us full word coverage
-        expected_words = len(script_words)
-        if expected_words > 0 and len(raw_word_timings) >= int(expected_words * 0.75):
-            # Align Edge word timings cleanly to exact script words (preserves punctuation)
-            edge_pairs = [(wt.word, wt.start, wt.end) for wt in raw_word_timings]
-            word_timings = align_whisper_words_to_script(script_words, edge_pairs, total_dur)
-        else:
-            print(
-                f"[tts] Edge WordBoundary returned {len(raw_word_timings)}/{expected_words} words; "
-                "falling back to faster-whisper CPU alignment."
+        # Chunk-anchored alignment per line
+        word_timings: list[WordTiming] = []
+        realign_count = 0
+        fallback_count = 0
+
+        for rec in chunk_records:
+            c_words = rec["words"]
+            c_dur = rec["dur"]
+            c_start = rec["start"]
+            c_wb = rec["wb"]
+            if len(c_wb) >= max(1, int(len(c_words) * 0.75)):
+                initial_raw = c_wb
+            else:
+                initial_raw = self._transcribe_with_faster_whisper(rec["wav_path"], beam_size=1)
+
+            def _realign_chunk(wp: str = rec["wav_path"]) -> list[tuple[str, float, float]]:
+                return self._transcribe_with_faster_whisper(
+                    wp, beam_size=5, condition_on_previous_text=False
+                )
+
+            aligned_local, status = verify_and_repair_chunk_timings(
+                c_words,
+                initial_raw,
+                c_dur,
+                re_align_fn=_realign_chunk,
+                max_gap_sec=1.5,
             )
-            whisper_words = self._transcribe_with_faster_whisper(final_wav)
-            word_timings = align_whisper_words_to_script(script_words, whisper_words, total_dur)
+            if status == "realigned":
+                realign_count += 1
+            elif status == "fallback_even":
+                fallback_count += 1
+
+            for wt in aligned_local:
+                word_timings.append(
+                    WordTiming(
+                        word=wt.word,
+                        start=round(c_start + wt.start, 3),
+                        end=round(c_start + wt.end, 3),
+                        line_id=wt.line_id,
+                    )
+                )
+
+        cov = verify_word_timing_coverage(
+            word_timings,
+            script_words,
+            total_dur,
+            intended_pauses,
+            max_gap_sec=1.5,
+        )
+        print(
+            f"[tts] Voice check: OK, {total_chunks} chunks, {total_retries} retries "
+            f"(realigned={realign_count}, even_fallback={fallback_count}, max_gap={cov['max_unintended_gap_sec']:.2f}s)",
+            flush=True,
+        )
 
         return TTSResult(
             audio_path=final_wav,
             duration_sec=round(total_dur, 3),
             word_timings=word_timings,
             line_timings=line_timings,
+            chunk_count=total_chunks,
+            retry_count=total_retries,
+            intended_pauses=intended_pauses,
+            max_unintended_gap_sec=cov["max_unintended_gap_sec"],
         )
 
-    def _transcribe_with_faster_whisper(self, audio_path: str) -> list[tuple[str, float, float]]:
-        try:
-            from faster_whisper import WhisperModel
-        except ImportError as exc:
-            raise RuntimeError("Edge returned no word timings and faster-whisper is not installed.") from exc
-
-        model = WhisperModel("base.en", device="cpu", compute_type="int8")
-        segments, _ = model.transcribe(audio_path, word_timestamps=True, language="en")
-        out: list[tuple[str, float, float]] = []
-        for seg in segments:
-            if not seg.words:
-                continue
-            for w in seg.words:
-                txt = (w.word or "").strip()
-                if txt:
-                    out.append((txt, float(w.start), float(w.end)))
-        return out
 
 
 class VoiceStudioCoupledSpeedupHook:
     """
     Phase 2 hook (OFF for Edge TTS):
     Applies coupled pitch+speed speedup via asetrate=44100*F,aresample=44100
-    and divides all word/line/card timestamps by F.
+    and divides all word/line/pause timestamps by F.
     """
 
     @staticmethod
@@ -465,11 +539,19 @@ class VoiceStudioCoupledSpeedupHook:
             )
             for lid, lt in result.line_timings.items()
         }
+        scaled_pauses = [
+            (round(s / factor, 3), round(e / factor, 3))
+            for s, e in result.intended_pauses
+        ]
         return TTSResult(
             audio_path=dst,
             duration_sec=round(new_dur, 3),
             word_timings=scaled_words,
             line_timings=scaled_lines,
+            chunk_count=result.chunk_count,
+            retry_count=result.retry_count,
+            intended_pauses=scaled_pauses,
+            max_unintended_gap_sec=round(result.max_unintended_gap_sec / factor, 3),
         )
 
 

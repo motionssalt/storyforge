@@ -427,5 +427,31 @@
       "Human subjective listening evaluation of accented Voice Design presets (verified programmatically via faster-whisper match >= 0.950, duration 9.68-10.69s, RMS -26.3 to -17.9 dB).",
       "Real human microphone / Nigerian-accent cloning upload from a browser (cloned smoke test used a synthesized reference clip via API)."
     ]
+  },
+  "round6": {
+    "status": "in_progress",
+    "updated_at": "2026-11-20T16:32:27Z",
+    "inspected_user_render": {
+      "job_id": "sf_mwp1r544_c31aa8",
+      "run_id": 44749389489,
+      "title": "The Boy Who Carried His Mother's Photograph",
+      "voice": "VoiceStudio / vs-harper (1.25x)",
+      "findings": [
+        "Part 1 (40.68s-48.68s, 31 words in one line): OmniVoice emitted -12.7 dB DC offset (mean -7629/32768) and muffled speech; faster-whisper failed to transcribe the stretch, and align_whisper_words_to_script squashed all 31 words into 0.04s each (40.68-41.92s) leaving a 6.76s gap (41.92-48.68s) with zero subtitles/highlighting.",
+        "Part 2 (32.94s-40.70s, 31 words in one line): OmniVoice emitted -10.6 dB DC offset (mean -9678/32768, waveform strictly negative [-14021, -1027]); Whisper missed the stretch and SequenceMatcher jumped across 7.76s to match the next sentence at 40.70s, leaving 32.94-40.70s blank and cramming the next 42 words into 0.04s/0.08s each.",
+        "Part 2 (50.10s-58.30s, 29 words in one line): OmniVoice speech AC RMS collapsed to -37.6..-45.0 dBFS (muffled/missing voice) on a -21.7 dB DC offset; Whisper transcribed 0 words and SequenceMatcher evenly interpolated 0.28s/word over dead audio."
+      ]
+    },
+    "fixes_implemented": [
+      "pipeline/audio_checks.py: sentence-level sub-chunking for >18-word segments, zero-phase FFT high-pass (<75 Hz) + DC removal + soft-limiting + 3ms edge fades, per-chunk validation (raw DC offset, duration vs word count, AC RMS, internal silence, 1.2s muffled-window scan, Whisper intelligibility), chunk-anchored alignment (preventing replace squashing and cross-chunk jumps), coverage check (all words covered, <=1.5s unintended gap), and final MP4 audio scan against word timings.",
+      "pipeline/voicestudio.py & pipeline/tts_engine.py: integrated 3-attempt per-chunk regeneration (varying seed, normalizing odd chars, raising num_step on retry 3), chunk-anchored alignment with re-run + length-weighted even fallback, and intended-pause tracking.",
+      "pipeline/run_job.py & .github/workflows/render.yml: added task log lines (Voice check, Timing check, Final audio check), fail-loudly on final MP4 audio check, added voicestudio_single fixture and pipeline/test_audio_checks.py CI step."
+    ],
+    "decisions": [
+      "Keep displayed card/subtitle script words unchanged from clean_spoken_text; only normalize text sent to TTS on retries.",
+      "Use pure-Python stdlib in audio_checks.py (with numpy fast-path when available) so verification runs both in minimal containers and GitHub Actions runners."
+    ],
+    "blockers": [],
+    "next_action": "Trigger live GitHub Actions render (voicestudio_single) and verify full video subtitles and voice waveform."
   }
 }
