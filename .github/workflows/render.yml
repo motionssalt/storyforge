@@ -8,6 +8,11 @@ on:
         description: "StoryForge Job ID"
         required: true
         type: string
+      voice_engine:
+        description: "Voice engine (voicestudio or edge)"
+        required: false
+        default: ""
+        type: string
       smoke_fixture:
         description: 'Optional repo fixture for CI smoke; uploads diagnostics only (no publishing)'
         type: choice
@@ -49,17 +54,22 @@ jobs:
         id: engine
         env:
           JOB_ID: ${{ inputs.job_id }}
+          INPUT_ENGINE: ${{ inputs.voice_engine }}
           FIXTURE: ${{ inputs.smoke_fixture }}
           WORKER_URL: ${{ secrets.WORKER_URL }}
           WORKER_INTERNAL_SECRET: ${{ secrets.WORKER_INTERNAL_SECRET }}
         run: |
           if [[ "$FIXTURE" == voicestudio_* ]]; then
             echo 'omni=true' >> "$GITHUB_OUTPUT"
-          elif [[ "$FIXTURE" == none ]]; then
-            CONFIG=$(curl --fail --silent --show-error --max-time 20 -G --data-urlencode "id=$JOB_ID" -H "X-Internal-Secret: $WORKER_INTERNAL_SECRET" -A StoryForge-Runner "$WORKER_URL/api/internal/job")
-            echo "omni=$(jq -r '.voice_engine == "voicestudio"' <<< "$CONFIG")" >> "$GITHUB_OUTPUT"
-          else
+          elif [[ "$FIXTURE" == edge_* ]]; then
             echo 'omni=false' >> "$GITHUB_OUTPUT"
+          elif [[ "$INPUT_ENGINE" == "edge" ]]; then
+            echo 'omni=false' >> "$GITHUB_OUTPUT"
+          elif [[ "$INPUT_ENGINE" == "voicestudio" ]]; then
+            echo 'omni=true' >> "$GITHUB_OUTPUT"
+          else
+            CONFIG=$(curl --fail --silent --show-error --max-time 20 -G --data-urlencode "id=$JOB_ID" -H "X-Internal-Secret: $WORKER_INTERNAL_SECRET" -A StoryForge-Runner "$WORKER_URL/api/internal/job")
+            echo "omni=$(jq -r '(.voice_engine // "voicestudio") != "edge"' <<< "$CONFIG")" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/cache@v4
@@ -106,8 +116,8 @@ jobs:
           HF_HUB_DISABLE_XET: '1'
         run: |
           case "$FIXTURE" in
-            edge_single) python pipeline/run_job.py --local-json schema/examples/single-video.json ;;
-            edge_two_part) python pipeline/run_job.py --local-json schema/examples/smoke-two-part.json ;;
+            edge_single) python pipeline/run_job.py --local-json schema/examples/single-video.json --engine edge --voice en-US-AndrewMultilingualNeural ;;
+            edge_two_part) python pipeline/run_job.py --local-json schema/examples/smoke-two-part.json --engine edge --voice en-US-AndrewMultilingualNeural ;;
             voicestudio_two_part) python pipeline/run_job.py --local-json schema/examples/smoke-two-part.json --engine voicestudio --voice vs-harper ;;
             voicestudio_long) python pipeline/run_job.py --local-json schema/examples/two-part-series.json --engine voicestudio --voice vs-harper ;;
             none) python pipeline/run_job.py ;;

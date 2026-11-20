@@ -22,7 +22,12 @@ import urllib.request
 from typing import Any
 
 
-MARKER_PATTERN = re.compile(r"\[(pause|sigh|laugh)\]", re.IGNORECASE)
+MARKER_PATTERN = re.compile(
+    r"\[(pause|sigh|laughter|laugh|confirmation-en|question-en|question-ah|"
+    r"question-oh|question-ei|question-yi|surprise-ah|surprise-oh|surprise-wa|"
+    r"surprise-yo|dissatisfaction-hnn)\]",
+    re.IGNORECASE,
+)
 
 
 def strip_emotion_markers(text: str) -> str:

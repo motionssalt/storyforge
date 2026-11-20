@@ -22,7 +22,12 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 
-MARKER_PATTERN = re.compile(r"\[(pause|sigh|laugh)\]", re.IGNORECASE)
+MARKER_PATTERN = re.compile(
+    r"\[(pause|sigh|laughter|laugh|confirmation-en|question-en|question-ah|"
+    r"question-oh|question-ei|question-yi|surprise-ah|surprise-oh|surprise-wa|"
+    r"surprise-yo|dissatisfaction-hnn)\]",
+    re.IGNORECASE,
+)
 
 # Subtle per-emotion Edge TTS rate/pitch tweaks (kept gentle for natural sound)
 EMOTION_EDGE_TWEAKS: dict[str, tuple[int, int]] = {
@@ -335,7 +340,7 @@ class EdgeTTSEngine:
             gap_sec = 0.0
             if "pause" in all_markers:
                 gap_sec = 0.38
-            elif "sigh" in all_markers or "laugh" in all_markers:
+            elif "sigh" in all_markers or "laugh" in all_markers or "laughter" in all_markers:
                 gap_sec = 0.16
             elif idx < len(lines) - 1:
                 gap_sec = 0.08
@@ -468,7 +473,7 @@ class VoiceStudioCoupledSpeedupHook:
         )
 
 
-def get_tts_engine(engine_name: str = "edge") -> TTSEngine:
+def get_tts_engine(engine_name: str = "voicestudio") -> TTSEngine:
     if engine_name == "edge":
         return EdgeTTSEngine()
     if engine_name == "voicestudio":

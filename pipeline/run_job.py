@@ -136,8 +136,11 @@ def render_all_parts(
     test_background: bool = False,
     background_mode: str = "sequential",
     background_clip: str | None = None,
-    tts_engine_name: str = "edge",
+    tts_engine_name: str = "voicestudio",
     coupled_speedup_factor: float | None = None,
+    voice_config: dict[str, Any] | None = None,
+    worker_url: str | None = None,
+    internal_secret: str | None = None,
     reporter: TaskReporter | None = None,
     stage_ref: list[str] | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
@@ -197,6 +200,8 @@ def render_all_parts(
     render_budget = 86.0
 
     for p_idx, part in enumerate(production_json["parts"]):
+        if reporter is not None and reporter.deleted:
+            raise RuntimeError("Task was cancelled/deleted during render.")
         p_num = int(part.get("part_number", p_idx + 1))
         part_tag = f"Part {p_num}/{total_parts}"
         part_base = 2.0 + (p_idx / total_parts) * render_budget
@@ -205,12 +210,20 @@ def render_all_parts(
         os.makedirs(part_dir, exist_ok=True)
 
         # 1. TTS + Word timings (0..18% of part span)
+        engine_label = "VoiceStudio" if tts_engine_name == "voicestudio" else "Edge TTS"
         tts_detail = f"VoiceStudio {coupled_speedup_factor or 1.25:.2f}x" if tts_engine_name == "voicestudio" else f"Edge rate {voice_speed}"
-        emit("tts", f"{part_tag}: Synthesizing narration ({voice_id}, {tts_detail})...", part_base + part_span * 0.02)
+        emit("tts", f"{part_tag}: Voice: {engine_label} / {voice_id} ({tts_detail})", part_base + part_span * 0.02)
         tts_res = engine.synthesize_lines(
             part["lines"],
             voice_id=voice_id,
-            settings={"voice_speed": voice_speed, "voicestudio_speedup": coupled_speedup_factor or 1.25},
+            settings={
+                "voice_speed": voice_speed,
+                "voicestudio_speedup": coupled_speedup_factor or 1.25,
+                "voice_config": voice_config,
+                "worker_url": worker_url,
+                "internal_secret": internal_secret,
+                "cancel_check": (lambda: bool(reporter and reporter.deleted)),
+            },
             out_dir=os.path.join(part_dir, "tts"),
         )
         emit(
@@ -331,9 +344,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--local-json", help="Run locally from a production JSON file")
     parser.add_argument("--local-bg", help="Local MP4 background clip for offline testing")
-    parser.add_argument("--engine", choices=["edge", "voicestudio"], default="edge")
+    parser.add_argument("--engine", choices=["edge", "voicestudio"], default="voicestudio")
     parser.add_argument("--voicestudio-speedup", type=float, default=1.25)
-    parser.add_argument("--voice", default="en-US-AndrewMultilingualNeural")
+    parser.add_argument("--voice", default="vs-harper")
     parser.add_argument("--speed", default="+34%")
     parser.add_argument("--out-dir", default="/tmp/sf_render")
     args = parser.parse_args()
@@ -378,10 +391,12 @@ def main() -> None:
         prod_json = job["production_json"]
         bg_mode = str(job.get("background_mode") or "sequential")
         bg_clip = job.get("background_clip")
+        eff_engine = str(job.get("voice_engine") or "voicestudio")
+        engine_label = "VoiceStudio" if eff_engine == "voicestudio" else "Edge TTS"
         reporter.log(
             "job_started",
             f"Render started: \"{prod_json.get('series_title', job_id)}\" "
-            f"({len(prod_json.get('parts', []))} part(s), voice={job['voice_id']}, bg_mode={bg_mode}"
+            f"({len(prod_json.get('parts', []))} part(s), Voice: {engine_label} / {job['voice_id']}, bg_mode={bg_mode}"
             f"{f' clip={bg_clip}' if bg_clip else ''})",
             progress_pct=1.5,
         )
@@ -402,8 +417,11 @@ def main() -> None:
             job_id=job_id,
             production_json=prod_json,
             voice_id=job["voice_id"],
-            tts_engine_name=job.get("voice_engine") or "edge",
+            tts_engine_name=eff_engine,
             coupled_speedup_factor=job.get("voicestudio_speedup"),
+            voice_config=job.get("voice_config"),
+            worker_url=worker_url,
+            internal_secret=secret,
             voice_speed=job.get("voice_speed", "+34%"),
             bg_index=int(job.get("background_index", 0)),
             work_dir=args.out_dir,
