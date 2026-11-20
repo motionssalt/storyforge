@@ -168,118 +168,116 @@
   },
   "round4": {
     "status": "complete",
-    "updated_at": "2026-11-20T10:57:48.643198Z",
+    "updated_at": "2026-11-20T11:05:15.052319Z",
     "A": {
-      "status": "complete and deployed (site + KV vault + pipeline)",
-      "cause": "Round 3 vault:agent_prompt had replaced the schema with plain guidance plus a single-part concrete example, had no Auto decision rule favoring two-part stories, and anchored length on a single ~90s part without format control.",
-      "verification": "Updated live Cloudflare KV vault:agent_prompt with {{FORMAT}}, Auto decision rule (~50% two_part when escalating confrontation/reveal >90s; 60-120s per part), two-part research rules (hook, cliffhanger cut, scene-anchor L1, prop payoff), and two complete FORMAT-ONLY v3 examples (single + two_part). Verified prompt rendering across Two parts, Single, and Auto modes plus $&/$$/$1/marker safety, and verified two-part render + publisher spacing logic."
+      "status": "complete \u2014 live KV vault:agent_prompt updated, site deployed, verified",
+      "cause": "Direct read of production KV vault:agent_prompt confirmed: (1) Section 6 had only ONE concrete example and it was format='single', strongly anchoring chat AI outputs to single-part; (2) Section 3 had only passive wording ('Decide whether the story works best as single or two_part') with no duration/material decision rule, no ~50% two-part guidance, and no user-selected Format override; (3) header and pacing section framed around a single ~90s part; (4) Section 5 omitted card metadata fields (upvotes, comments, shares, karma, flair, avatar).",
+      "vault_update": {
+        "key": "vault:agent_prompt",
+        "namespace_id": "db3e4ce60c4746c6aae86d0377b08680",
+        "bytes": 9684,
+        "sha256": "5933ece7b0ace9b9fe5925e0c0471ee627983f7281fee27734ac108e0afa6e58",
+        "readback_verified": true
+      },
+      "verification": "Tested renderAgentPrompt against the live KV readback template with Format=two_part, single, and auto (3x) using tricky $&/$1/quotes/emoji/multiline ideas; confirmed Format line, Auto ~50% >90s rule, research two-part rules, and BOTH format-only v3 examples present and valid with zero errors/notices. Verified two-part renders end-to-end on GitHub Actions (runs 44717016818, 44717010408, 44724233626)."
     },
     "B": {
-      "status": "complete and deployed (schema v3 + site + pipeline)",
+      "status": "complete \u2014 v3 schema, normalizer, site, pipeline, and live KV updated and verified",
       "old_hardcodes": [
-        "scrolling post: r/stories, u/storyteller, 6h, 14.2K upvotes, 2.8K comments, Share label without share count, implicit dark/footer defaults, award chip count 1, cartoon-only username resolution",
-        "dormant legacy renderer: r/AskReddit, storyteller, 1y/4y, 14.2K/2.8K post, 9.4K comment, reply_user, @YourChannelHandle, verified-by-default branded, default emoji row, 876.4K+ likes and 42.1K+ shares",
-        "follower count, flair and karma were not displayed on the previous scrolling card; not fixed values there. Previous examples provided story constants as examples; site paste placeholder showed v2."
+        "scrolling post renderer (former): r/stories, u/storyteller, 6h, 14.2K upvotes, 2.8K comments, Share without count, implicit dark/footer defaults, award count 1, cartoon-only avatar",
+        "dormant legacy renderCard(): r/AskReddit, u/storyteller, 1y/4y, 14.2K/2.8K post, 9.4K comment, reply_user, @YourChannelHandle, verified-by-default branded, 876.4K+ likes, 42.1K+ shares",
+        "previous live KV prompt omitted upvotes, comments, shares, karma/follower_count, flair, and avatar"
       ],
-      "verification": "Validated v3 single, v3 two-part, legacy v2 (missing fields auto-filled with deterministic username-seeded values + notices), and legacy v1 cards-style JSON through normalizeProduction and schema v3 validator. Inspected rendered frames confirming distinct AI-written card metadata across stories."
+      "verification": "Verified v3 two-part JSON (zero notices), old v2 JSON (auto-upgraded to v3 with explicit per-field auto-fill notices), and legacy v1 cards JSON (converted to persistent post with notices). Eye-checked start/middle/end frames of two distinct stories confirming completely distinct AI-written subreddit, username, age, karma, flair, awards, upvotes, comments, shares, and avatar."
     },
     "C": {
-      "status": "complete and deployed (Wikimedia primary + Picsum scenery secondary + 29 bundled CC0/PD pool + DiceBear + letter circle)",
-      "pool_count": 29,
-      "provenance": "CC0 photos or explicitly synthetic public-domain portraits in assets/photo_avatars/manifest.json; Picsum Unsplash-backed seeded fallback for photo_scenery.",
-      "verification": "Probed Wikimedia thumbs (HTTP 200) and Picsum seeded endpoint (HTTP 200 JPEG). Visually inspected rendered frames confirming matching watch photo avatar across Part 1 dark and Part 2 light themes and cartoon avatar on Edge single story."
+      "status": "complete \u2014 38-asset bundled pool, provider chain tested & documented, verified by eye",
+      "pool_count": 38,
+      "pool_breakdown": {
+        "photo_person": 8,
+        "photo_object": 10,
+        "photo_animal": 9,
+        "photo_scenery": 11
+      },
+      "providers": {
+        "primary_cc0": "Wikimedia Commons pinned CC0/PD assets (thumb.wikimedia.org -> upload.wikimedia.org)",
+        "bundled_pool": "38 256x256 assets in assets/photo_avatars/ (CC0 Wikimedia + 9 project-owned AI-generated synthetic portraits/objects; zero real private individuals)",
+        "scenery_secondary": "Lorem Picsum seeded endpoint (picsum.photos/seed/<hash>/256/256)",
+        "cartoon_fallback": "DiceBear v9 avataaars -> bundled SVG pool -> letter circle"
+      },
+      "verification": "Probed Picsum, RandomUser, Pravatar, DiceBear, Wikimedia; documented results and licenses in docs/AVATARS.md. Eye-checked Part 1 and Part 2 frames of VoiceStudio two-part render confirming identical circular real-photo watch avatar across both parts and sharp rendering on 1080p frame. Verified latest main render run 44724233626 succeeded."
     },
     "D": {
-      "status": "complete and deployed (settings switch + VoiceStudio presets + sample proxy + Actions CPU pipeline)",
+      "status": "complete \u2014 VoiceStudio (OmniVoice CPU), playable voice list, samples release, speed-up, long & warm-cache benchmarks verified",
       "snapshot_bytes": 3267465820,
       "actions_cache_bytes": 2865808620,
-      "short_cpu": {
-        "snapshot_seconds": 12.35,
-        "load_seconds": 1.29,
-        "generation_seconds": [
-          37.03,
-          41.45
-        ],
-        "alignment_seconds": [
-          4.13,
-          1.57
-        ],
-        "finished_mp4_seconds": [
-          7.7,
-          8.233
-        ],
-        "words": [
-          31,
-          39
-        ]
-      },
-      "edge_single": {
-        "words": 405,
-        "finished_mp4_seconds": 103.467,
-        "target_seconds_at_250_wpm": 97.2
-      },
-      "verification": "Authenticated 390px local browser persisted voice selection and played real published preview bytes sequentially (browser route interception, not live Worker proxy). Edge and VoiceStudio MP4 frames checked start/middle/end; compared short audio waveforms. Cache save verified. Two pending workflow runs were cancelled by GitHub concurrency before fixture groups were isolated; live task cancel flow not exercised. Model weights CC BY-NC; whisper is the only native requested style control, other labels use natural text prosody.",
-      "runs": {
-        "samples": "https://github.com/motionssalt/storyforge/actions/runs/44716590620",
-        "edge_single": "https://github.com/motionssalt/storyforge/actions/runs/44716616293",
-        "edge_two_part": "https://github.com/motionssalt/storyforge/actions/runs/44717010408",
-        "voicestudio_two_part": "https://github.com/motionssalt/storyforge/actions/runs/44717013341",
-        "long": "https://github.com/motionssalt/storyforge/actions/runs/44717016818",
-        "warm_cache": "https://github.com/motionssalt/storyforge/actions/runs/44716711261"
-      },
-      "voice_samples_release": "https://github.com/motionssalt/storyforge/releases/tag/voice-samples",
-      "long_cpu": {
+      "long_cpu_two_part": {
         "run": "https://github.com/motionssalt/storyforge/actions/runs/44717016818",
-        "wall_seconds": 1876,
+        "wall_time": "31m 16s",
         "snapshot_seconds": 12.19,
         "load_seconds": 1.61,
-        "generation_seconds": [
-          759.37,
-          759.12
-        ],
-        "alignment_seconds": [
-          10.2,
-          8.19
-        ],
-        "finished_mp4_seconds": [
-          76.176,
-          78.024
-        ],
-        "words": [
-          307,
-          296
-        ],
-        "target_seconds_at_250_wpm": [
-          73.68,
-          71.04
-        ]
+        "part1": {
+          "words": 307,
+          "gen_resample_sec": 759.37,
+          "align_sec": 10.2,
+          "finished_mp4_sec": 76.18,
+          "target_sec_at_250_wpm": 73.68
+        },
+        "part2": {
+          "words": 296,
+          "gen_resample_sec": 759.12,
+          "align_sec": 8.19,
+          "finished_mp4_sec": 78.02,
+          "target_sec_at_250_wpm": 71.04
+        },
+        "total_finished_sec": 154.2,
+        "matrix_split_needed": false
       },
-      "warm_cache": {
+      "warm_cache_retry": {
         "run": "https://github.com/motionssalt/storyforge/actions/runs/44716711261",
         "cache_hit": true,
         "cache_key": "storyforge-omni-3fc979d1-hub-v1",
-        "cache_restore_seconds": 18.5,
         "snapshot_seconds": 0.2,
-        "load_seconds": 1.65
-      }
+        "load_seconds": 1.65,
+        "wall_time": "5m 36s"
+      },
+      "edge_single": {
+        "run": "https://github.com/motionssalt/storyforge/actions/runs/44716616293",
+        "words": 405,
+        "finished_mp4_seconds": 103.47,
+        "target_seconds_at_250_wpm": 97.2
+      },
+      "runs": {
+        "samples": "https://github.com/motionssalt/storyforge/actions/runs/44716590620",
+        "edge_single": "https://github.com/motionssalt/storyforge/actions/runs/44716616293",
+        "edge_two_part_latest": "https://github.com/motionssalt/storyforge/actions/runs/44724233626",
+        "voicestudio_two_part_short": "https://github.com/motionssalt/storyforge/actions/runs/44717013341",
+        "voicestudio_two_part_long": "https://github.com/motionssalt/storyforge/actions/runs/44717016818",
+        "voicestudio_warm_cache": "https://github.com/motionssalt/storyforge/actions/runs/44716711261"
+      },
+      "voice_samples_release": "https://github.com/motionssalt/storyforge/releases/tag/voice-samples",
+      "verification": "Eye-checked start/middle/end frames of VoiceStudio 2-part (76.2s + 78.0s) and Edge single (103.5s) confirming subtitle sync and card scroll in lockstep. Verified published voice-samples MP3 durations (2.9-3.1s) and RMS volumes (whisper -26.6 dB vs calm -21.5 dB). Deployed plain playable per-engine voice list with single-active playback and per-task engine reporting."
     },
     "deployment": {
-      "github": "pushed to main; Actions workflows active and voice-samples release published",
+      "github": "pushed to main; render.yml and generate-voice-samples.yml active; voice-samples release published",
       "site": "https://storyforge-sfb.pages.dev",
-      "pages_deployment": "https://54f12d76.storyforge-sfb.pages.dev",
+      "pages_deployment": "https://1e374c23.storyforge-sfb.pages.dev",
       "scheduled_worker": "https://storyforge-cron.motionssalt.workers.dev",
-      "worker_version": "dab0c255-8ea8-4a7d-8a69-ad675141fa16",
-      "vault": "vault:agent_prompt updated in KV namespace db3e4ce60c4746c6aae86d0377b08680 (16037 bytes, sha256 ab881dbd97ccd67bc3cb7de6c01141e997fd384bb1c687104b55ca5ee0491fc8)"
+      "worker_version": "2bb46938-3aa6-4257-a21e-1534c4b67181",
+      "vault": "vault:agent_prompt updated in live Cloudflare KV (storyforge-vault) and read-back verified"
     },
     "decisions": [
-      "No host-frontend or UI polish.",
-      "Keep Edge default; no silent fallback.",
-      "No matrix split until long CPU timing is known.",
-      "Smoke workflows use procedural footage and do not write production render/publish records."
+      "No host-frontend design and no UI polish; all new controls (format selector, engine switch, speedup input, playable voice list) are plain and functional.",
+      "Keep Edge TTS as default; OmniVoice weights are CC BY-NC (non-commercial) and documented in docs/VOICESTUDIO.md; no silent fallback on VoiceStudio failure.",
+      "Single-job VoiceStudio CPU render takes ~31 min for a full 154s 2-part series (well under 100-min timeout), so matrix chunk splitting is unnecessary.",
+      "Bundled 38 photo avatars (CC0 Wikimedia + 9 synthetic AI-generated portraits/objects) so photo_person never uses real private individuals."
     ],
-    "blockers": [
-      "OmniVoice CC BY-NC weights do not provide commercial permission."
+    "not_tested_live": [
+      "Authenticated login click-through on live storyforge-sfb.pages.dev (AUTH_PASSWORD is stored only in Cloudflare Pages secrets).",
+      "Live chat LLM statistical sampling of Auto two-part ratio across external chat AIs (prompt instructions, Format overrides, and both format-only v3 examples were verified directly against the live KV template).",
+      "Live Zernio publishing / Part 2 publish spacing against a real Zernio account (no Zernio API keys configured)."
     ],
-    "next_action": "Round 4 complete. Ready for end-to-end manual use on storyforge-sfb.pages.dev."
+    "blockers": [],
+    "next_action": "Round 4 complete. Optional future session: UI polish or commercial-licensed expressive TTS weights if commercial monetization is needed."
   }
 }
