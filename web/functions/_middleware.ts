@@ -1,6 +1,7 @@
 import { isAuthenticated } from "./api/[[path]]";
 
 const MAX_STANDARD_BODY = 262144; // 256 KiB
+const MAX_VOICE_UPLOAD_BODY = 20 * 1024 * 1024; // 20 MiB (voice clips, .pt clone prompts, MP3 previews)
 const MAX_UPLOAD_BODY = 99614720; // 95 MiB (safely under Cloudflare Free 100 MB request ceiling)
 
 export const onRequest: PagesFunction<any> = async (context) => {
@@ -14,6 +15,11 @@ export const onRequest: PagesFunction<any> = async (context) => {
   }
 
   const isBgUpload = path === "/api/backgrounds/upload" && request.method === "POST";
+  const isVoiceBinaryUpload =
+    request.method === "POST" &&
+    (path === "/api/voices/cloned/clip" ||
+      path === "/api/internal/voice-prompt" ||
+      path === "/api/internal/voice-preview");
   const contentLen = Number(request.headers.get("Content-Length") || 0);
 
   if (isBgUpload) {
@@ -23,6 +29,13 @@ export const onRequest: PagesFunction<any> = async (context) => {
           error:
             "File is over StoryForge's direct-upload limit (95 MiB). Use URL / Google Drive import instead.",
         },
+        { status: 413 }
+      );
+    }
+  } else if (isVoiceBinaryUpload) {
+    if (contentLen > MAX_VOICE_UPLOAD_BODY) {
+      return Response.json(
+        { error: "Audio clip or voice asset exceeds 20 MiB limit. Use a clean 3-10 second clip." },
         { status: 413 }
       );
     }
