@@ -154,6 +154,10 @@ def _normalize_core(core: str, prev_lower: str = "") -> str:
     if m:
         raw_d = m.group(1)
         n = int(raw_d)
+        if n == 2000:
+            return "two thousands"
+        if n in (2010, 2020):
+            return "twenty tens" if n == 2010 else "twenty twenties"
         if 1900 <= n <= 1999 and n % 10 == 0:
             decade = (n % 100)
             base = _TENS[decade // 10]
@@ -310,7 +314,8 @@ def map_spoken_timings_to_display(
             prev_end = out[-1].end if out else 0.0
             out.append(WordTiming(word=orig_w, start=round(prev_end, 3), end=round(prev_end + 0.04, 3), line_id=lid))
             continue
-        st = float(slice_wt[0].start)
+        prev_end = out[-1].end if out else 0.0
+        st = max(prev_end, float(slice_wt[0].start))
         en = max(st + 0.04, float(slice_wt[-1].end))
         out.append(WordTiming(word=orig_w, start=round(st, 3), end=round(en, 3), line_id=lid))
     return out

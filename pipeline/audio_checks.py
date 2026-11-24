@@ -132,15 +132,89 @@ def split_long_segment_for_tts(seg_text: str, max_words: int = 18) -> list[str]:
         else:
             refined.append(p)
 
-    # Merge tiny trailing fragments (<= 2 spoken words) back into the previous sub-chunk
-    merged: list[str] = []
+    def _word_count(s: str) -> int:
+        return len(re.sub(r"\[[a-z0-9_-]+\]", "", s, flags=re.IGNORECASE).split())
+
+    # Pack consecutive short sentences into healthy ~8..max_words chunks so tiny fragments
+    # like "It was me." (3 words) stay attached to neighboring context instead of triggering
+    # short-chunk OmniVoice duration over-allocation / DC collapse.
+    packed: list[str] = []
     for p in refined:
-        p_words = re.sub(r"\[[a-z0-9_-]+\]", "", p, flags=re.IGNORECASE).split()
-        if merged and len(p_words) <= 2:
-            merged[-1] = f"{merged[-1]} {p}".strip()
+        pw = _word_count(p)
+        if not packed:
+            packed.append(p)
+            continue
+        cw = _word_count(packed[-1])
+        combined = f"{packed[-1]} {p}".strip()
+        if (cw + pw <= max_words and len(combined) <= 165) or (pw <= 5 and cw + pw <= max_words + 4):
+            packed[-1] = combined
         else:
-            merged.append(p)
-    return [m for m in merged if m]
+            packed.append(p)
+
+    # Also ensure the first chunk is not a tiny <=5-word fragment when a next chunk exists
+    i = 0
+    while i < len(packed):
+        if _word_count(packed[i]) <= 5 and i + 1 < len(packed):
+            if _word_count(packed[i]) + _word_count(packed[i + 1]) <= max_words + 4:
+                packed[i : i + 2] = [f"{packed[i]} {packed[i + 1]}".strip()]
+                continue
+        i += 1
+
+    return [m for m in packed if m]
+
+
+def split_chunk_into_clauses(text: str) -> list[str]:
+    """
+    Split a line/chunk into shorter sentence or clause parts for Attempt 3 retry,
+    keeping each sub-part at least 2 words whenever possible.
+    """
+    raw = str(text or "").strip()
+    if not raw:
+        return []
+
+    def _wcnt(s: str) -> int:
+        return len(re.sub(r"\[[a-z0-9_-]+\]", "", s, flags=re.IGNORECASE).split())
+
+    # 1. Try splitting into separate sentences (only keeping splits with >= 2 words each)
+    sents: list[str] = []
+    cur_start = 0
+    for m in re.finditer(r"([.!?][\"'\u201d\u2019\)]*)\s+(?=[A-Z0-9\"'\u201c\u2018(\[])", raw):
+        prefix = raw[cur_start : m.end(1)].strip()
+        last_tok = prefix.split()[-1] if prefix.split() else ""
+        if _ABBREV_RE.search(last_tok):
+            continue
+        if prefix:
+            sents.append(prefix)
+        cur_start = m.end()
+    tail = raw[cur_start:].strip()
+    if tail:
+        sents.append(tail)
+
+    if len(sents) >= 2:
+        merged_s: list[str] = []
+        for s in sents:
+            if merged_s and _wcnt(s) < 2:
+                merged_s[-1] = f"{merged_s[-1]} {s}".strip()
+            else:
+                merged_s.append(s)
+        if len(merged_s) >= 2 and all(_wcnt(x) >= 2 for x in merged_s):
+            return merged_s
+
+    # 2. Single sentence: split near midpoint at clause punctuation (, ; : — -)
+    mid = len(raw) // 2
+    best_pos = None
+    best_dist = 10**9
+    for cm in re.finditer(r"([,;:\u2014]|\s-\s)\s+", raw):
+        left_w = _wcnt(raw[: cm.start()])
+        right_w = _wcnt(raw[cm.end() :])
+        if left_w >= 3 and right_w >= 3:
+            d = abs(cm.start() - mid)
+            if d < best_dist:
+                best_dist = d
+                best_pos = cm
+    if best_pos is not None:
+        return [raw[: best_pos.end(1)].strip(), raw[best_pos.end() :].strip()]
+    return [raw]
 
 
 def clean_omnivoice_wave(wave_arr: Any, sample_rate: int = 24000) -> tuple[Any, float]:

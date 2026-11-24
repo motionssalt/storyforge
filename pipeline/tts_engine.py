@@ -30,6 +30,10 @@ from audio_checks import (
     verify_and_repair_chunk_timings,
     verify_word_timing_coverage,
 )
+from text_norm import (
+    map_spoken_timings_to_display,
+    prepare_alignment_expansion,
+)
 
 
 MARKER_PATTERN = re.compile(
@@ -258,6 +262,10 @@ class EdgeTTSEngine:
             if not clean_text:
                 continue
 
+            display_words = [(w, lid) for w in clean_text.split()]
+            spoken_words_line, disp_counts = prepare_alignment_expansion(display_words)
+            spoken_text = " ".join(w for w, _ in spoken_words_line)
+
             dr, _ = EMOTION_EDGE_TWEAKS.get(emotion, (0, 0))
             eff_rate = format_rate(base_rate_pct + dr)
 
@@ -271,13 +279,13 @@ class EdgeTTSEngine:
 
             for val_try in range(3):
                 if val_try == 0:
-                    cand_text = clean_text
+                    cand_text = spoken_text
                     cand_rate = eff_rate
                 elif val_try == 1:
-                    cand_text = normalize_text_for_retry(clean_text, level=1) or clean_text
+                    cand_text = normalize_text_for_retry(spoken_text, level=1) or spoken_text
                     cand_rate = eff_rate
                 else:
-                    cand_text = normalize_text_for_retry(clean_text, level=2) or clean_text
+                    cand_text = normalize_text_for_retry(spoken_text, level=2) or spoken_text
                     cand_rate = "+0%"
 
                 last_exc: Exception | None = None
@@ -340,7 +348,7 @@ class EdgeTTSEngine:
                 val_ok, last_val_reason, stats = validate_tts_chunk(
                     samples,
                     sr,
-                    clean_text,
+                    spoken_text,
                     sound_tag_count=0,
                     is_whisper_emotion=(emotion == "whisper"),
                     is_voicestudio=False,
@@ -366,7 +374,7 @@ class EdgeTTSEngine:
             line_end = cursor + line_dur
             line_timings[lid] = LineTiming(line_id=lid, start=round(line_start, 3), end=round(line_end, 3))
 
-            words_in_line = [(w, lid) for w in clean_text.split()]
+            words_in_line = display_words
             script_words.extend(words_in_line)
             chunk_records.append(
                 {
@@ -376,6 +384,8 @@ class EdgeTTSEngine:
                     "end": line_end,
                     "dur": line_dur,
                     "words": words_in_line,
+                    "spoken_words": spoken_words_line,
+                    "disp_counts": disp_counts,
                     "wb": list(line_wb),
                 }
             )
@@ -431,10 +441,12 @@ class EdgeTTSEngine:
 
         for rec in chunk_records:
             c_words = rec["words"]
+            c_spoken = rec["spoken_words"]
+            c_counts = rec["disp_counts"]
             c_dur = rec["dur"]
             c_start = rec["start"]
             c_wb = rec["wb"]
-            if len(c_wb) >= max(1, int(len(c_words) * 0.75)):
+            if len(c_wb) >= max(1, int(len(c_spoken) * 0.75)):
                 initial_raw = c_wb
             else:
                 initial_raw = self._transcribe_with_faster_whisper(rec["wav_path"], beam_size=1)
@@ -444,8 +456,8 @@ class EdgeTTSEngine:
                     wp, beam_size=5, condition_on_previous_text=False
                 )
 
-            aligned_local, status = verify_and_repair_chunk_timings(
-                c_words,
+            aligned_spoken, status = verify_and_repair_chunk_timings(
+                c_spoken,
                 initial_raw,
                 c_dur,
                 re_align_fn=_realign_chunk,
@@ -455,6 +467,7 @@ class EdgeTTSEngine:
                 realign_count += 1
             elif status == "fallback_even":
                 fallback_count += 1
+            aligned_local = map_spoken_timings_to_display(c_words, aligned_spoken, c_counts)
 
             for wt in aligned_local:
                 word_timings.append(

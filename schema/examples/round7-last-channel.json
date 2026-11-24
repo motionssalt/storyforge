@@ -1,0 +1,391 @@
+{
+  "schema_version": 3,
+  "series_title": "The Last Channel",
+  "format": "two_part",
+  "parts": [
+    {
+      "part_number": 1,
+      "title": "[PART 1] My television turned on at exactly 2:13 every morning, even when it wasn't plugged in",
+      "description": "Every night, my television showed the same empty hallway. But each night, the camera moved closer to a bedroom that looked disturbingly familiar. When my landlord finally admitted the previous tenant had experienced the same thing, he gave me one warning I couldn't ignore.",
+      "hashtags": [
+        "#redditstories",
+        "#scarystories",
+        "#horrorstory",
+        "#paranormal",
+        "#creepystories",
+        "#storytime",
+        "#part1",
+        "#fyp"
+      ],
+      "story_so_far": "A tenant discovers that his television displays a hallway that gradually approaches his bedroom. After documenting the nightly changes, he learns the previous tenant experienced the same phenomenon and suspects his landlord knows considerably more than he admits.",
+      "post": {
+        "theme": "dark",
+        "subreddit": "r/Paranormal",
+        "username": "u/static_after_two",
+        "age": "8h",
+        "title": "My television turns on at 2:13 every morning, even when it's unplugged. I finally asked my landlord about it.",
+        "upvotes": "12.7k",
+        "comments": 986,
+        "shares": 473,
+        "karma": "8.4k",
+        "awards": [
+          {
+            "type": "helpful",
+            "count": 2
+          }
+        ],
+        "flair": "Unexplained",
+        "nsfw": false,
+        "verified": false,
+        "avatar": {
+          "style": "photo_object",
+          "keyword": "television"
+        }
+      },
+      "lines": [
+        {
+          "id": "L1",
+          "text": "My television came back from the basement by itself, and at exactly 2:13 the following morning, it turned on.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L2",
+          "text": "I know how ridiculous that sounds, but I'd carried it downstairs myself. I'd even left it beside the recycling bins.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L3",
+          "text": "The screen started black, then a white line appeared across the middle. Slowly, it opened into a picture of a hallway.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L4",
+          "text": "Yellow wallpaper, dark red carpet, and a door on the left. There were no channel numbers, no logo, and absolutely no sound.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L5",
+          "text": "The weirdest part was that the camera moved farther down the hallway every night. On Monday, the door was closed. Tuesday, it was open.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L6",
+          "text": "So I started writing everything in a notebook, including the exact time. I also began recording the screen with my phone.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L7",
+          "text": "By Thursday, something was standing inside that open doorway. It was tall, incredibly thin, and completely motionless.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L8",
+          "text": "Friday night, I moved into my bedroom because I didn't want to watch it anymore. At 2:13, the television switched on in the other room.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L9",
+          "text": "Then I heard three slow knocks coming from the wall directly beside my bed. Three more followed a few seconds later.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L10",
+          "text": "I called my landlord the next morning. I explained everything, and he went completely silent when I mentioned the knocking.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L11",
+          "text": "Eventually, he admitted the previous tenant had complained about the same television. She'd left without notice, and apparently, he'd told the police she went back to her parents.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L12",
+          "text": "I asked if he'd ever investigated the bedroom wall. He immediately told me not to open it.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L13",
+          "text": "That was when I noticed something I'd overlooked. There was a small rectangular outline beneath the wallpaper, and an old brass key sitting inside the kitchen drawer.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L14",
+          "text": "That night, I covered the television with a blanket and put my phone on record. At 2:13, the picture appeared anyway.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L15",
+          "text": "The camera had reached the open doorway. The tall figure was gone. Instead, the screen showed a bedroom.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L16",
+          "text": "My bedroom. My window, my chair, even the blue shirt I'd left hanging behind it.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L17",
+          "text": "The camera moved closer until I could see someone sitting on my bed. Then I realized he was wearing exactly what I was wearing.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L18",
+          "text": "I raised my hand. He raised his. I stood up. He stood up. But on the television, my bedroom door was slowly opening.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L19",
+          "text": "And behind that door was the same tall figure. I grabbed my keys and ran. But before leaving, I noticed something on my phone recording.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L20",
+          "text": "The recording showed someone standing behind me the entire time. I was alone in the room, but the reflection in the television showed two people.",
+          "emotion": "whisper"
+        },
+        {
+          "id": "L21",
+          "text": "I spent the night in my car. The next morning, I returned with my landlord, my notebook, and the brass key.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L22",
+          "text": "The television had disappeared. My landlord insisted nothing unusual had happened, but when I showed him the recording, his expression changed.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L23",
+          "text": "He reached for my phone and told me to delete it. I refused. Then he looked at the brass key in my other hand.",
+          "emotion": "angry"
+        },
+        {
+          "id": "L24",
+          "text": "He finally whispered, 'Where did you get that?' I pointed toward the bedroom wall. And when I showed him the rectangular outline, he stepped backward.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L25",
+          "text": "He said the previous tenant had hidden something behind that wall. Then he told me that if I wanted to know what happened to her, I should unlock it.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L26",
+          "text": "I put my phone down to record, inserted the brass key into the small metal opening, and started turning it.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L27",
+          "text": "But before the lock could turn completely, someone knocked three times from the other side.",
+          "emotion": "whisper",
+          "markers": [
+            "pause"
+          ]
+        }
+      ]
+    },
+    {
+      "part_number": 2,
+      "title": "[PART 2] My landlord knew what was behind that bedroom wall, and he had been hiding it for years",
+      "description": "The brass key opened something my landlord had spent years trying to conceal. What we found explained the previous tenant's disappearance, but it also revealed why the television had followed me beyond the apartment.",
+      "hashtags": [
+        "#redditstories",
+        "#scarystories",
+        "#horrorstory",
+        "#paranormal",
+        "#creepystories",
+        "#storytime",
+        "#part2",
+        "#fyp"
+      ],
+      "story_so_far": "The tenant discovers a concealed compartment behind his bedroom wall, connected to the previous tenant's disappearance and the mysterious television broadcasts. His landlord's reaction exposes years of deliberate concealment, but escaping the apartment does not end the phenomenon.",
+      "post": {
+        "theme": "dark",
+        "subreddit": "r/Paranormal",
+        "username": "u/static_after_two",
+        "age": "1d",
+        "title": "UPDATE: I turned the brass key my landlord told me never to use. I wish I hadn't.",
+        "upvotes": "21.3k",
+        "comments": "1.8k",
+        "shares": 924,
+        "karma": "8.4k",
+        "awards": [
+          {
+            "type": "gold",
+            "count": 1
+          },
+          {
+            "type": "helpful",
+            "count": 3
+          }
+        ],
+        "flair": "Update",
+        "nsfw": false,
+        "verified": false,
+        "avatar": {
+          "style": "photo_object",
+          "keyword": "television"
+        }
+      },
+      "lines": [
+        {
+          "id": "L1",
+          "text": "I was standing in my bedroom with my landlord when three knocks came from inside the wall. Then the brass key finally turned.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L2",
+          "text": "A narrow panel shifted outward. Behind it was a cramped maintenance passage, barely wide enough for one person.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L3",
+          "text": "There was an old television inside, a wooden chair, and dozens of photographs pinned to the walls.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L4",
+          "text": "Every photograph showed the same hallway from the television. But the last few were different. They showed my bedroom.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L5",
+          "text": "I found photographs of myself sleeping, sitting at my desk, and walking into the kitchen. Some had dates from before I'd even moved in.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L6",
+          "text": "Then I found a notebook with the previous tenant's name on the first page. Her handwriting was shaky, but one sentence had been underlined repeatedly.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L7",
+          "text": "It said, 'The hallway isn't showing the apartment. It's showing where the apartment is going.'",
+          "emotion": "whisper"
+        },
+        {
+          "id": "L8",
+          "text": "I turned another page. She'd written that the figure appeared closer whenever someone watched the screen. Eventually, it stopped appearing on the television altogether.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L9",
+          "text": "The final entry was dated the morning she disappeared. It simply said, 'Tonight, the hallway reaches the door.'",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L10",
+          "text": "I turned around and asked my landlord how long he'd known about this room. He didn't answer.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L11",
+          "text": "Instead, he tried to push past me and shut the panel. I stepped aside, kept my phone recording, and told him the police were already on their way.",
+          "emotion": "angry"
+        },
+        {
+          "id": "L12",
+          "text": "That was when he finally admitted he'd found the room years earlier. The previous tenant had shown him the photographs, but he'd told her she was imagining things.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L13",
+          "text": "He'd covered the entrance, kept the key, and rented the apartment to someone else. He'd done it because he didn't want anyone investigating the building.",
+          "emotion": "angry"
+        },
+        {
+          "id": "L14",
+          "text": "I asked him where the previous tenant was. He stared at the photographs and said, 'I don't think she ever left.'",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L15",
+          "text": "I didn't wait for another explanation. I took photographs of everything, kept the notebook, and left the building before the police arrived.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L16",
+          "text": "I moved into a hotel three towns away. I gave the police my recordings and the landlord's admission. I thought that would finally be the end of it.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L17",
+          "text": "But I couldn't sleep. I kept checking the hotel corridor camera feed on my phone, just to make sure nobody was standing outside my room.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L18",
+          "text": "At exactly 2:13, the television switched on. There was no hallway this time. It showed the hotel corridor.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L19",
+          "text": "The camera was positioned at the far end, pointed directly toward my door. Then someone walked into the frame.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L20",
+          "text": "It was me. Same clothes, same shoes, and the old brass key in my hand. But I was sitting on the bed watching the screen.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L21",
+          "text": "On the television, the other version of me stopped outside my hotel room. He slowly raised his hand.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L22",
+          "text": "Three knocks sounded from the other side of my actual door.",
+          "emotion": "whisper"
+        },
+        {
+          "id": "L23",
+          "text": "I looked down at my hand. The brass key I'd carried out of that apartment was gone.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L24",
+          "text": "On the screen, the other me was holding it up, almost like he wanted me to recognize it. Then he reached for the hotel door handle.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L25",
+          "text": "I backed away from the television. The handle on my real door started turning. Slowly. Like whoever was outside already knew it was unlocked.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L26",
+          "text": "I grabbed my phone and called reception, but nobody answered. The television suddenly went black.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L27",
+          "text": "I thought the broadcast had finally stopped. Then I heard a fourth knock, this time from inside my bedroom closet.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L28",
+          "text": "I haven't opened it. I haven't moved. I'm still sitting on this bed, typing this post with every light in the room switched on.",
+          "emotion": "whisper"
+        },
+        {
+          "id": "L29",
+          "text": "The worst part is that I just checked the hotel corridor camera again. My door is completely closed.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L30",
+          "text": "But the camera is no longer at the end of the hallway. It's inside my room, pointed directly at my bed.",
+          "emotion": "shocked",
+          "markers": [
+            "pause"
+          ]
+        },
+        {
+          "id": "L31",
+          "text": "And there's someone standing behind me.",
+          "emotion": "whisper"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,513 @@
+{
+  "schema_version": 3,
+  "series_title": "The Room Between Floors",
+  "format": "two_part",
+  "parts": [
+    {
+      "part_number": 1,
+      "title": "[PART 1] My building has 12 floors, but the elevator keeps stopping at 13",
+      "description": "I thought our old elevator was malfunctioning until I saw what was waiting on the thirteenth floor. Then my elderly neighbor recognized something I couldn't see, and the building manager started acting strangely.",
+      "hashtags": [
+        "#redditstories",
+        "#scarystories",
+        "#horrorstory",
+        "#storytime",
+        "#creepystories",
+        "#part1",
+        "#fyp"
+      ],
+      "story_so_far": "A tenant discovers that their elevator sometimes opens onto a mysterious thirteenth floor. After witnessing increasingly disturbing events, they discover their neighbor knows something about the building's secret, while the manager appears determined to conceal it.",
+      "post": {
+        "theme": "dark",
+        "subreddit": "r/Glitch_in_the_Matrix",
+        "username": "u/landing_light_47",
+        "age": "8h",
+        "title": "My building only has 12 floors, but the elevator keeps stopping at 13. My neighbor knows why.",
+        "upvotes": "12.7k",
+        "comments": 936,
+        "shares": 487,
+        "karma": "8.4k",
+        "awards": [
+          {
+            "type": "gold",
+            "count": 1
+          },
+          {
+            "type": "helpful",
+            "count": 2
+          }
+        ],
+        "flair": "Unexplained",
+        "nsfw": false,
+        "verified": false,
+        "avatar": {
+          "style": "photo_object",
+          "keyword": "lantern"
+        }
+      },
+      "lines": [
+        {
+          "id": "L1",
+          "text": "My apartment building has twelve floors, but last night the elevator opened onto a hallway that shouldn't exist.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L2",
+          "text": "I know it sounds ridiculous, but I've lived here for eight months, and I've seen the number 13 appear on that display three separate times.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L3",
+          "text": "There's no thirteenth-floor button. I've checked. The elevator goes from the basement straight through twelve.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L4",
+          "text": "The first time, the doors opened onto a hallway that looked almost identical to mine. Except the lights were dead, the carpet was soaking wet, and every apartment number had been scratched off.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L5",
+          "text": "Then I heard a child laughing somewhere in the darkness. I held the close button until the doors finally shut.",
+          "emotion": "whisper"
+        },
+        {
+          "id": "L6",
+          "text": "I reported it to the building manager. He immediately asked if I'd been drinking, then told me old wiring sometimes caused strange displays.",
+          "emotion": "sarcastic"
+        },
+        {
+          "id": "L7",
+          "text": "But here's what bothered me. When I asked whether he'd ever seen thirteen himself, he stopped smiling and told me to forget about it.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L8",
+          "text": "So I started keeping a written log of every incident, including the exact time and floor. I also recorded the elevator display on my phone.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L9",
+          "text": "Three weeks later, it happened again. This time, the doors opened just a few inches. Through the gap, I saw a woman standing with her back toward me.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L10",
+          "text": "She wore a long, dark coat. Her hair was completely wet, and one hand was pressed against the hallway wall.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L11",
+          "text": "I pressed the close button. The woman slowly turned her head without moving her body. I couldn't see her face, but I knew she was looking directly at me.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L12",
+          "text": "That night, someone stood outside my apartment for almost an hour. I heard the footsteps stop directly in front of my door. I didn't look through the peephole.",
+          "emotion": "whisper"
+        },
+        {
+          "id": "L13",
+          "text": "The third time, I wasn't alone. I was riding with an elderly neighbor named Mrs. Vale, who lived in apartment 8B.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L14",
+          "text": "The elevator stopped. Thirteen appeared on the display. Before the doors even moved, Mrs. Vale dropped her shopping trolley.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L15",
+          "text": "She grabbed my arm and whispered, 'Don't let it open.'",
+          "emotion": "whisper"
+        },
+        {
+          "id": "L16",
+          "text": "I held the close button. Something began dragging its fingernails across the other side of the elevator doors.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L17",
+          "text": "Mrs. Vale started shaking. Then she looked at me and said something I'll never forget.",
+          "emotion": "sad"
+        },
+        {
+          "id": "L18",
+          "text": "'It knows you live here now.'",
+          "emotion": "whisper"
+        },
+        {
+          "id": "L19",
+          "text": "Before I could ask what she meant, the lights went out. A voice came from somewhere inside the elevator.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L20",
+          "text": "'Which one is yours?'",
+          "emotion": "whisper",
+          "markers": [
+            "pause"
+          ]
+        },
+        {
+          "id": "L21",
+          "text": "The lights returned. We were back on eight. Mrs. Vale ran out without her trolley and locked herself inside 8B.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L22",
+          "text": "The following morning, I found her trolley outside my apartment. A note was attached to the handle. It said, 'I'm sorry. It asked me first.'",
+          "emotion": "sad"
+        },
+        {
+          "id": "L23",
+          "text": "I photographed the note and immediately contacted the police. But when they arrived, it had disappeared. So had Mrs. Vale.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L24",
+          "text": "Her furniture was untouched. Her bed was made. Even her purse was sitting on the kitchen table with her keys inside.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L25",
+          "text": "The manager claimed she'd gone to stay with relatives. I demanded their contact information. He refused, then ordered me to stop investigating.",
+          "emotion": "angry"
+        },
+        {
+          "id": "L26",
+          "text": "That's when I decided I wasn't going to trust another word he said. I kept copies of my recordings and my incident log somewhere he couldn't access them.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L27",
+          "text": "I took the stairs for six months. I avoided the elevator completely. Then one rainy evening, I came home carrying a box of old photographs my sister had mailed me.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L28",
+          "text": "The stairwell lights were dead. I heard the elevator moving above me. It passed the eighth floor, then the ninth, tenth, eleventh, and twelfth.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L29",
+          "text": "Then it stopped. I looked through the stairwell window. The display was glowing.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L30",
+          "text": "Thirteen.",
+          "emotion": "shocked",
+          "markers": [
+            "pause"
+          ]
+        },
+        {
+          "id": "L31",
+          "text": "The doors opened, and I could see that same wet hallway. But this time, someone was standing at the far end.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L32",
+          "text": "It was Mrs. Vale. Same green cardigan. Same shopping trolley. She raised one finger to her lips, then pointed directly behind me.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L33",
+          "text": "I turned around. There was a door in the concrete stairwell wall. I'd walked past that exact spot hundreds of times.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L34",
+          "text": "It had a brass number plate. Eight C. My apartment was 8A. Mrs. Vale's was 8B.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L35",
+          "text": "And the handle was slowly turning from the other side.",
+          "emotion": "tense"
+        }
+      ]
+    },
+    {
+      "part_number": 2,
+      "title": "[PART 2] The photograph inside my apartment was dated 14 years before I was born",
+      "description": "A mysterious door marked 8C appears in my stairwell, and the photographs inside my delivery box reveal something impossible. But the building manager has been hiding a much bigger secret than a faulty elevator.",
+      "hashtags": [
+        "#redditstories",
+        "#scarystories",
+        "#horrorstory",
+        "#storytime",
+        "#creepystories",
+        "#part2",
+        "#fyp"
+      ],
+      "story_so_far": "After six months of avoiding the elevator, the narrator discovers a mysterious apartment marked 8C beside their own. An old photograph reveals that the narrator, Mrs. Vale, and the building manager were apparently together fourteen years before the narrator was born.",
+      "post": {
+        "theme": "dark",
+        "subreddit": "r/Glitch_in_the_Matrix",
+        "username": "u/landing_light_47",
+        "age": "1d",
+        "title": "UPDATE | I found an apartment marked 8C that wasn't on the building plans. Then I saw an old photograph.",
+        "upvotes": "21.3k",
+        "comments": "1.8k",
+        "shares": 934,
+        "karma": "8.4k",
+        "awards": [
+          {
+            "type": "gold",
+            "count": 2
+          },
+          {
+            "type": "heart",
+            "count": 1
+          }
+        ],
+        "flair": "Update",
+        "nsfw": false,
+        "verified": false,
+        "avatar": {
+          "style": "photo_object",
+          "keyword": "lantern"
+        }
+      },
+      "lines": [
+        {
+          "id": "L1",
+          "text": "I was standing in my apartment building's dark stairwell, staring at a door marked 8C, when I heard my own voice coming from behind it.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L2",
+          "text": "The handle turned again. I dropped the box of photographs and stepped backward. Pictures scattered across the concrete floor.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L3",
+          "text": "I looked through the photographs, hoping to find something that would explain what was happening. Most were old family pictures.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L4",
+          "text": "Then one landed face up. It showed the lobby of my building, with the elevator behind a group of people smiling at the camera.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L5",
+          "text": "I recognized Mrs. Vale. She was standing beside the building manager. But there was another person between them.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L6",
+          "text": "It was me. Same face. Same scar above my eyebrow. Even the little birthmark on my neck was there.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L7",
+          "text": "I turned the photograph over. The date was written in faded ink. Fourteen years before I was born.",
+          "emotion": "shocked",
+          "markers": [
+            "pause"
+          ]
+        },
+        {
+          "id": "L8",
+          "text": "I immediately took pictures of the photograph and sent them to my sister. Then I remembered the manager's behavior and decided to check something.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L9",
+          "text": "Before moving in, I'd received a copy of the building's original floor plan. It showed twelve floors, but there was no apartment 8C anywhere.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L10",
+          "text": "I pulled out my phone and called the manager. He answered after two rings.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L11",
+          "text": "I asked him one question. 'Who lived in apartment 8C?'",
+          "emotion": "whisper"
+        },
+        {
+          "id": "L12",
+          "text": "There was silence. Then he said, 'Where did you see that number?'",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L13",
+          "text": "I told him I was in the stairwell. He immediately told me to leave the building and wait outside.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L14",
+          "text": "I asked why. His response made my stomach drop.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L15",
+          "text": "'Because that apartment belongs to someone who hasn't moved out yet.'",
+          "emotion": "whisper",
+          "markers": [
+            "pause"
+          ]
+        },
+        {
+          "id": "L16",
+          "text": "I looked at the door. The lock clicked. It opened another inch.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L17",
+          "text": "A smell came through the gap. Dust, rain, and something sweet that had started to rot.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L18",
+          "text": "Then I heard a child laughing inside. The exact same laughter I'd heard on the thirteenth floor.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L19",
+          "text": "And then my own voice spoke from inside the room.",
+          "emotion": "whisper"
+        },
+        {
+          "id": "L20",
+          "text": "'Which one is yours?'",
+          "emotion": "shocked",
+          "markers": [
+            "pause"
+          ]
+        },
+        {
+          "id": "L21",
+          "text": "I ran. I didn't even stop to collect the photographs. I made it outside and called the police again.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L22",
+          "text": "This time, I gave them the recordings, the incident log, and the photograph. I also told them about Mrs. Vale and the manager's refusal to provide any information.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L23",
+          "text": "They sent officers to the building. The manager was waiting in the lobby. He looked furious when he saw me.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L24",
+          "text": "He insisted that I was confused and that apartment 8C didn't exist. One officer asked him to produce the original building records.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L25",
+          "text": "The manager refused. Then another officer noticed something behind the reception desk. An old brass key with a tag that read 8C.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L26",
+          "text": "The manager tried to take it, but the officer stopped him. He finally admitted that he'd known about the strange floor for years.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L27",
+          "text": "He claimed previous tenants had reported the same thing. Some disappeared from their apartments, while others left behind photographs of people who hadn't been born yet.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L28",
+          "text": "When I asked why he'd never warned anyone, he said the building had been operating normally for years and he didn't want to cause panic.",
+          "emotion": "angry"
+        },
+        {
+          "id": "L29",
+          "text": "I told him that was a convenient excuse for someone who kept hiding missing tenants and denying documented incidents.",
+          "emotion": "angry"
+        },
+        {
+          "id": "L30",
+          "text": "The officers took the key and secured the building records. The manager was removed from his position while the investigation continued.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L31",
+          "text": "I moved out three days later. I never found Mrs. Vale, and nobody could explain the photograph.",
+          "emotion": "sad"
+        },
+        {
+          "id": "L32",
+          "text": "My sister eventually sent me another envelope containing the remaining photographs from the same collection. I'd almost forgotten about them.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L33",
+          "text": "There was one photograph I hadn't seen before. It showed the same lobby, the same elevator, and the same group of people.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L34",
+          "text": "But this time, the picture was taken from inside the elevator. Everyone was looking toward the camera.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L35",
+          "text": "Everyone except me. I was standing at the back, facing the open doors. Behind me was a dark hallway with wet carpet.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L36",
+          "text": "I turned the picture over. There was a handwritten message underneath.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L37",
+          "text": "'Eight C. Reserved for the next tenant.'",
+          "emotion": "whisper",
+          "markers": [
+            "pause"
+          ]
+        },
+        {
+          "id": "L38",
+          "text": "I threw the photograph into the trash. But that night, at exactly 2:13 AM, my new apartment's elevator stopped outside my floor.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L39",
+          "text": "I checked the security camera feed. The hallway was empty. The elevator display showed thirteen.",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L40",
+          "text": "Then my phone rang. It was an unknown number. I answered, and a familiar elderly woman's voice whispered:",
+          "emotion": "whisper"
+        },
+        {
+          "id": "L41",
+          "text": "'You shouldn't have left your photographs behind.'",
+          "emotion": "shocked"
+        },
+        {
+          "id": "L42",
+          "text": "I looked toward my front door. Something was sliding a photograph underneath it.",
+          "emotion": "tense"
+        },
+        {
+          "id": "L43",
+          "text": "I picked it up. It was a picture of my new apartment building.",
+          "emotion": "calm"
+        },
+        {
+          "id": "L44",
+          "text": "And somewhere in the background, barely visible through the lobby windows, was an elevator with a thirteenth-floor button.",
+          "emotion": "shocked",
+          "markers": [
+            "pause"
+          ]
+        }
+      ]
+    }
+  ]
+}

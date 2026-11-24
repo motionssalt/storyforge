@@ -518,7 +518,7 @@ def main() -> None:
         )
         print("JOB COMPLETE:", job_id)
     except Exception as exc:
-        err_short = f"[{stage_ref[0]}] {str(exc)[:420]}"
+        err_short = f"[{stage_ref[0]}] {str(exc)[:1800]}"
         err_msg = f"{err_short}\n{traceback.format_exc()[-1000:]}"
         print("JOB FAILED:", err_msg, file=sys.stderr)
         try:
@@ -530,7 +530,7 @@ def main() -> None:
             worker_post_status(
                 worker_url,
                 secret,
-                {"job_id": job_id, "status": "failed", "stage": stage_ref[0], "error": err_short[:500]},
+                {"job_id": job_id, "status": "failed", "stage": stage_ref[0], "error": err_short[:2000]},
             )
         except Exception:
             pass

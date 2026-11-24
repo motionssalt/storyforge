@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import re
 import subprocess
 import time
@@ -14,10 +15,16 @@ from typing import Any
 from audio_checks import (
     clean_omnivoice_wave,
     normalize_text_for_retry,
+    split_chunk_into_clauses,
     split_long_segment_for_tts,
     validate_tts_chunk,
     verify_and_repair_chunk_timings,
     verify_word_timing_coverage,
+)
+from text_norm import (
+    map_spoken_timings_to_display,
+    normalize_text_for_tts,
+    prepare_alignment_expansion,
 )
 from tts_engine import (
     EdgeTTSEngine,
@@ -93,17 +100,20 @@ PRESETS: dict[str, tuple[str, str, str]] = {
 }
 
 
-def normalize_omnivoice_text(text: str) -> str:
-    """Normalize inline StoryForge markers for OmniVoice (e.g. [laugh] -> [laughter])."""
+def normalize_omnivoice_text(text: str, *, allow_tags: bool = True) -> str:
+    """Normalize inline markers & convert numbers/times/symbols to spoken words for OmniVoice."""
     txt = LAUGH_ALIAS_RE.sub("[laughter]", str(text or ""))
 
     def _canon(m: re.Match[str]) -> str:
+        if not allow_tags:
+            return " "
         tag = m.group(1).lower()
         if tag == "laugh":
             tag = "laughter"
-        return f"[{tag}]"
+        return f"[{tag}]" if tag in OMNIVOICE_SOUND_TAGS else " "
 
-    txt = NON_PAUSE_TAG_RE.sub(_canon, txt)
+    txt = re.sub(r"\[([a-z0-9_-]+)\]", _canon, txt, flags=re.IGNORECASE)
+    txt = normalize_text_for_tts(txt)
     txt = re.sub(r"\s{2,}", " ", txt).strip()
     return txt
 
@@ -164,7 +174,10 @@ class VoiceStudioEngine:
             print(f"[voicestudio] snapshot {total} bytes, available after {time.monotonic()-ts:.2f}s", flush=True)
             ts = time.monotonic()
             self.model = OmniVoice.from_pretrained(path, device_map="cpu", dtype=torch.float32).eval()
-            print(f"[voicestudio] CPU model load {time.monotonic()-ts:.2f}s", flush=True)
+            self.model = self.model.to(dtype=torch.float32).eval()
+            if getattr(self.model, "audio_tokenizer", None) is not None:
+                self.model.audio_tokenizer = self.model.audio_tokenizer.to(dtype=torch.float32).eval()
+            print(f"[voicestudio] CPU model load {time.monotonic()-ts:.2f}s (float32)", flush=True)
         return self.model
 
     def prepare_clone_prompt(
@@ -397,9 +410,11 @@ class VoiceStudioEngine:
                     if not sub_words:
                         continue
                     script.extend(sub_words)
+                    sub_spoken_words, sub_disp_counts = prepare_alignment_expansion(sub_words)
+                    sub_spoken_clean = " ".join(w for w, _ in sub_spoken_words)
 
                     sub_with_tags = sub_text
-                    sub_tag_count = len([t for t in sub_tags if t != "pause"])
+                    sub_tag_count = len([t for t in sub_tags if t != "pause" and t in OMNIVOICE_SOUND_TAGS])
                     if seg_i == last_spoken_idx and sub_i == len(sub_chunks) - 1 and extra_sound_tags:
                         sub_with_tags = sub_with_tags + " " + " ".join(f"[{t}]" for t in extra_sound_tags)
                         sub_tag_count += len(extra_sound_tags)
@@ -407,47 +422,162 @@ class VoiceStudioEngine:
                     chosen_wave = None
                     chosen_16k = None
                     chosen_whisper_words: list[tuple[str, float, float]] = []
-                    last_reason = "unknown"
+                    attempt_log: list[tuple[int, str, str]] = []
+                    sys_rng = random.SystemRandom()
+                    base_seed_val = int(active_seed if active_seed is not None else 1001)
+                    used_seeds = {base_seed_val}
 
-                    for attempt in range(3):
+                    def _next_random_seed() -> int:
+                        for _ in range(32):
+                            cand = sys_rng.randint(10_000, 99_999_999)
+                            if cand not in used_seeds:
+                                used_seeds.add(cand)
+                                return cand
+                        return base_seed_val + len(used_seeds) * 7919
+
+                    def _run_gen(c_text: str, c_seed: int | None, c_steps: int, extra: dict[str, Any] | None = None) -> tuple[Any, float]:
+                        with torch.inference_mode():
+                            if c_seed is not None:
+                                torch.manual_seed(int(c_seed))
+                            gen_kwargs: dict[str, Any] = {
+                                "text": c_text,
+                                "language": "en",
+                                "num_step": c_steps,
+                            }
+                            if active_prompt is not None:
+                                gen_kwargs["voice_clone_prompt"] = active_prompt
+                            else:
+                                gen_kwargs["instruct"] = active_instruct
+                            if extra:
+                                gen_kwargs.update(extra)
+                            rw = model.generate(**gen_kwargs)[0]
+                        rw = np.asarray(rw, dtype=np.float32).reshape(-1)
+                        if not rw.size or not np.isfinite(rw).all():
+                            raise ValueError("empty or non-finite audio")
+                        return clean_omnivoice_wave(rw, rate)
+
+                    for attempt in range(4):
                         if callable(cancel_check) and cancel_check():
                             raise TaskCancelledError("Task was cancelled/deleted during VoiceStudio synthesis.")
 
-                        if attempt == 0:
-                            cand_text = normalize_omnivoice_text(sub_with_tags)
-                            cand_seed = active_seed
-                            cand_steps = num_step
-                        elif attempt == 1:
-                            cand_text = normalize_omnivoice_text(normalize_text_for_retry(sub_with_tags, level=1))
-                            cand_seed = (active_seed if active_seed is not None else 1001) + 101
-                            cand_steps = num_step
-                        else:
-                            cand_text = normalize_omnivoice_text(normalize_text_for_retry(sub_with_tags, level=2))
-                            cand_seed = (active_seed if active_seed is not None else 1001) + 202
-                            cand_steps = max(num_step, 20)
-
-                        if not re.search(r"\w", clean_spoken_text(cand_text)[0]):
-                            cand_text = normalize_omnivoice_text(sub_with_tags)
+                        strategy_desc = ""
+                        eff_spoken_for_val = sub_spoken_clean
+                        eff_tag_count = sub_tag_count
 
                         try:
-                            with torch.inference_mode():
-                                if cand_seed is not None:
-                                    torch.manual_seed(int(cand_seed))
-                                gen_kwargs: dict[str, Any] = {"text": cand_text, "num_step": cand_steps}
-                                if active_prompt is not None:
-                                    gen_kwargs["voice_clone_prompt"] = active_prompt
+                            if attempt == 0:
+                                # Attempt 1: written text normalized for spoken numbers/times, odd punct cleaned, supported tags kept
+                                cand_text = normalize_omnivoice_text(
+                                    normalize_text_for_retry(sub_with_tags, level=1),
+                                    allow_tags=True,
+                                )
+                                if not re.search(r"\w", clean_spoken_text(cand_text)[0]):
+                                    cand_text = normalize_omnivoice_text(sub_with_tags, allow_tags=True)
+                                strategy_desc = f"normalized, seed={active_seed}, f32"
+                                cleaned_wave, raw_dc = _run_gen(cand_text, active_seed, num_step)
+
+                            elif attempt == 1:
+                                # Attempt 2: new random seed (keeping voice identity) + float32 + gentle short-chunk duration/sampling shift
+                                cand_seed = _next_random_seed()
+                                cand_text = normalize_omnivoice_text(
+                                    normalize_text_for_retry(sub_with_tags, level=1),
+                                    allow_tags=True,
+                                )
+                                if not re.search(r"\w", clean_spoken_text(cand_text)[0]):
+                                    cand_text = normalize_omnivoice_text(sub_with_tags, allow_tags=True)
+                                extra_kw: dict[str, Any] = {"class_temperature": 0.25}
+                                if len(sub_spoken_words) <= 6:
+                                    extra_kw["duration"] = round(max(1.5, len(sub_spoken_words) * 0.44 + 0.40), 2)
+                                strategy_desc = f"reseeded={cand_seed}, f32"
+                                cleaned_wave, raw_dc = _run_gen(cand_text, cand_seed, max(num_step, 20), extra_kw)
+
+                            elif attempt == 2:
+                                # Attempt 3: split line/chunk into shorter sentences/clauses and generate each with gap
+                                clauses = split_chunk_into_clauses(sub_with_tags)
+                                cand_seed = _next_random_seed()
+                                if len(clauses) >= 2:
+                                    strategy_desc = f"split {len(clauses)} clauses, seed={cand_seed}"
+                                    sub_waves: list[Any] = []
+                                    max_sub_dc = 0.0
+                                    gap_arr = np.zeros(round(rate * INTER_SENTENCE_GAP_SEC), dtype=np.float32)
+                                    for ci, cl in enumerate(clauses):
+                                        cl_seed = cand_seed if ci == 0 else _next_random_seed()
+                                        cl_text = normalize_omnivoice_text(
+                                            normalize_text_for_retry(cl, level=1),
+                                            allow_tags=True,
+                                        )
+                                        cl_clean, cl_tags = clean_spoken_text(cl)
+                                        cl_spoken = normalize_text_for_tts(cl_clean)
+                                        if not re.search(r"\w", cl_spoken):
+                                            continue
+                                        cl_extra: dict[str, Any] = {"class_temperature": 0.25}
+                                        if len(cl_spoken.split()) <= 6:
+                                            cl_extra["duration"] = round(max(1.5, len(cl_spoken.split()) * 0.44 + 0.40), 2)
+                                        cw, cdc = _run_gen(cl_text, cl_seed, max(num_step, 20), cl_extra)
+                                        max_sub_dc = max(max_sub_dc, abs(cdc))
+                                        cl_tag_cnt = len([t for t in cl_tags if t != "pause" and t in OMNIVOICE_SOUND_TAGS])
+                                        cl_ok, cl_reason, _ = validate_tts_chunk(
+                                            cw,
+                                            rate,
+                                            cl_spoken,
+                                            sound_tag_count=cl_tag_cnt,
+                                            raw_dc_offset=cdc,
+                                            is_whisper_emotion=(emotion == "whisper"),
+                                            is_voicestudio=True,
+                                            speedup_factor=factor,
+                                            whisper_transcribe_fn=None,
+                                        )
+                                        if not cl_ok:
+                                            raise ValueError(f"clause {ci + 1}/{len(clauses)} failed: {cl_reason}")
+                                        if sub_waves and gap_arr.size:
+                                            sub_waves.append(gap_arr)
+                                        sub_waves.append(cw)
+                                    if not sub_waves:
+                                        raise ValueError("no clause audio generated")
+                                    cleaned_wave = np.concatenate(sub_waves).astype(np.float32)
+                                    raw_dc = max_sub_dc
                                 else:
-                                    gen_kwargs["instruct"] = active_instruct
-                                raw_wave = model.generate(**gen_kwargs)[0]
-                            raw_wave = np.asarray(raw_wave, dtype=np.float32).reshape(-1)
-                            if not raw_wave.size or not np.isfinite(raw_wave).all():
-                                raise ValueError("empty or non-finite audio")
+                                    # Indivisible short clause: force distinct target duration + step32 + postprocess=False
+                                    cand_text = normalize_omnivoice_text(
+                                        normalize_text_for_retry(sub_with_tags, level=1),
+                                        allow_tags=True,
+                                    )
+                                    strategy_desc = f"single-clause step32+dur, seed={cand_seed}"
+                                    cleaned_wave, raw_dc = _run_gen(
+                                        cand_text,
+                                        cand_seed,
+                                        max(num_step, 32),
+                                        {
+                                            "postprocess_output": False,
+                                            "class_temperature": 0.35,
+                                            "duration": round(max(1.85, len(sub_spoken_words) * 0.50 + 0.50), 2),
+                                        },
+                                    )
+
+                            else:
+                                # Attempt 4 (Last resort): plain-text rewrite (spelled-out numbers/times, NO tags, simplified punct)
+                                cand_seed = _next_random_seed()
+                                plain_rw = normalize_text_for_retry(normalize_text_for_tts(sub_clean), level=2) or sub_spoken_clean
+                                plain_rw = re.sub(r"\s{2,}", " ", plain_rw).strip()
+                                if plain_rw and plain_rw[-1] not in ".!?":
+                                    plain_rw += "."
+                                eff_spoken_for_val = re.sub(r"[^\w\s']", " ", plain_rw)
+                                eff_spoken_for_val = re.sub(r"\s{2,}", " ", eff_spoken_for_val).strip() or sub_spoken_clean
+                                eff_tag_count = 0
+                                extra_kw4: dict[str, Any] = {"class_temperature": 0.35}
+                                if len(sub_spoken_words) <= 6:
+                                    extra_kw4["duration"] = round(max(1.95, len(sub_spoken_words) * 0.52 + 0.50), 2)
+                                strategy_desc = f"plain-text rewrite (no tags), seed={cand_seed}"
+                                cleaned_wave, raw_dc = _run_gen(plain_rw, cand_seed, max(num_step, 28), extra_kw4)
                         except Exception as exc:
                             last_reason = f"synthesis error: {exc}"
-                            print(f"[voicestudio] chunk generation failed ({lid} try {attempt+1}/3): {last_reason}", flush=True)
+                            attempt_log.append((attempt + 1, strategy_desc or f"attempt {attempt + 1}", last_reason))
+                            print(
+                                f"[voicestudio] chunk generation failed ({lid} attempt {attempt + 1}/4 [{strategy_desc}]): {last_reason}",
+                                flush=True,
+                            )
                             continue
 
-                        cleaned_wave, raw_dc = clean_omnivoice_wave(raw_wave, rate)
                         wave_16k = _to_16k_fast(cleaned_wave) if align else None
                         fast_dur = (cleaned_wave.size / float(rate)) / factor
 
@@ -463,8 +593,8 @@ class VoiceStudioEngine:
                         ok, reason, stats = validate_tts_chunk(
                             cleaned_wave,
                             rate,
-                            sub_clean,
-                            sound_tag_count=sub_tag_count,
+                            eff_spoken_for_val,
+                            sound_tag_count=eff_tag_count,
                             raw_dc_offset=raw_dc,
                             is_whisper_emotion=(emotion == "whisper"),
                             is_voicestudio=True,
@@ -477,17 +607,24 @@ class VoiceStudioEngine:
                             chosen_whisper_words = stats.get("whisper_words", [])
                             total_chunks += 1
                             total_retries += attempt
+                            if attempt > 0:
+                                print(f"[voicestudio] {lid} attempt {attempt + 1} OK ({strategy_desc})", flush=True)
                             break
 
                         last_reason = reason
+                        attempt_log.append((attempt + 1, strategy_desc, reason))
                         print(
-                            f"[voicestudio] chunk validation failed ({lid} chunk #{total_chunks + 1} try {attempt+1}/3): {reason}",
+                            f"[voicestudio] chunk validation failed ({lid} chunk #{total_chunks + 1} attempt {attempt + 1}/4 [{strategy_desc}]): {reason}",
                             flush=True,
                         )
 
                     if chosen_wave is None:
+                        attempts_summary = "\n".join(f"Attempt {a} ({st}): {rs}" for a, st, rs in attempt_log)
+                        chunk_note = f'\nChunk: "{sub_text}"' if sub_text.strip() != raw_text.strip() else ""
                         raise RuntimeError(
-                            f"OmniVoice synthesis failed validation at {lid} after 3 attempts: {last_reason}"
+                            f"OmniVoice synthesis failed validation at {lid} after 4 attempts.\n"
+                            f'Failing line ({lid}): "{raw_text}"{chunk_note}\n'
+                            f"{attempts_summary}"
                         )
 
                     c_start_sample = raw_sample_cursor
@@ -500,6 +637,8 @@ class VoiceStudioEngine:
                         {
                             "lid": lid,
                             "words": sub_words,
+                            "spoken_words": sub_spoken_words,
+                            "disp_counts": sub_disp_counts,
                             "start_sample": c_start_sample,
                             "end_sample": c_end_sample,
                             "whisper_words": chosen_whisper_words,
@@ -560,8 +699,8 @@ class VoiceStudioEngine:
                         max_dur_sec=mdur,
                     )
 
-                aligned_local, status = verify_and_repair_chunk_timings(
-                    rec["words"],
+                aligned_spoken, status = verify_and_repair_chunk_timings(
+                    rec["spoken_words"],
                     rec["whisper_words"],
                     c_dur,
                     re_align_fn=_realign_chunk,
@@ -571,6 +710,7 @@ class VoiceStudioEngine:
                     realign_count += 1
                 elif status == "fallback_even":
                     fallback_count += 1
+                aligned_local = map_spoken_timings_to_display(rec["words"], aligned_spoken, rec["disp_counts"])
 
                 for wt in aligned_local:
                     word_timings.append(

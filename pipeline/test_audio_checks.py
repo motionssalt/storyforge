@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -15,11 +16,17 @@ from audio_checks import (  # noqa: E402
     WordTiming,
     align_whisper_words_to_chunk,
     normalize_text_for_retry,
+    split_chunk_into_clauses,
     split_long_segment_for_tts,
     validate_tts_chunk,
     verify_and_repair_chunk_timings,
     verify_final_video_audio,
     verify_word_timing_coverage,
+)
+from text_norm import (  # noqa: E402
+    map_spoken_timings_to_display,
+    normalize_text_for_tts,
+    prepare_alignment_expansion,
 )
 
 
@@ -36,13 +43,56 @@ class TestAudioChecks(unittest.TestCase):
             "I just wanted him to stop pretending my mother had left me with nothing."
         )
         chunks = split_long_segment_for_tts(long_txt, max_words=18)
-        self.assertEqual(len(chunks), 3)
+        self.assertEqual(len(chunks), 2)
+        self.assertEqual(" ".join(chunks).split(), long_txt.split())
         self.assertIn("love me.", chunks[0])
-        self.assertIn("apologize.", chunks[1])
-        self.assertIn("nothing.", chunks[2])
+        self.assertIn("nothing.", chunks[1])
 
         short_txt = "She walked out the door without saying a word."
         self.assertEqual(split_long_segment_for_tts(short_txt, max_words=18), [short_txt])
+
+        # Round 7 regression: never isolate tiny <=5-word fragments ("It was me.") when neighbor exists
+        l20 = "It was me. Same clothes, same shoes, and the old brass key in my hand. But I was sitting on the bed watching the screen."
+        c20 = split_long_segment_for_tts(l20, max_words=18)
+        self.assertEqual(" ".join(c20).split(), l20.split())
+        self.assertGreater(len(c20[0].split()), 5)
+
+        l6 = "It was me. Same face. Same scar above my eyebrow. Even the little birthmark on my neck was there."
+        c6 = split_long_segment_for_tts(l6, max_words=18)
+        self.assertEqual(" ".join(c6).split(), l6.split())
+        self.assertGreater(len(c6[0].split()), 5)
+
+        clauses = split_chunk_into_clauses(l20)
+        self.assertGreaterEqual(len(clauses), 2)
+
+    def test_spoken_number_time_normalization_and_alignment_mapping(self) -> None:
+        src = "At exactly 2:13 AM, 12 floors up, apartment 8C cost $50 on the 13th [pause] day & 24/7."
+        norm = normalize_text_for_tts(src)
+        self.assertIn("two thirteen A M,", norm)
+        self.assertIn("twelve floors", norm)
+        self.assertIn("eight C", norm)
+        self.assertIn("fifty dollars", norm)
+        self.assertIn("thirteenth", norm)
+        self.assertIn("[pause]", norm)
+        self.assertIn("and", norm)
+        self.assertIn("twenty four seven", norm)
+
+        disp_tokens = [(w, "L1") for w in src.replace("[pause]", "").split()]
+        spoken_tokens, counts = prepare_alignment_expansion(disp_tokens)
+        self.assertEqual(len(counts), len(disp_tokens))
+
+        whisper_words = [
+            (re.sub(r"[^a-zA-Z0-9']", "", w).lower(), i * 0.3, (i + 1) * 0.3)
+            for i, (w, _) in enumerate(spoken_tokens)
+        ]
+        dur = len(spoken_tokens) * 0.3
+        aligned_sp, status = verify_and_repair_chunk_timings(spoken_tokens, whisper_words, dur, max_gap_sec=1.5)
+        self.assertEqual(status, "ok")
+        mapped = map_spoken_timings_to_display(disp_tokens, aligned_sp, counts)
+        self.assertEqual([m.word for m in mapped], [w for w, _ in disp_tokens])
+        verify_word_timing_coverage(mapped, disp_tokens, dur, [], max_gap_sec=1.5)
+        idx_213 = [i for i, (w, _) in enumerate(disp_tokens) if w == "2:13"][0]
+        self.assertGreaterEqual(mapped[idx_213].end - mapped[idx_213].start, 0.55)
 
     def test_normalize_text_for_retry(self) -> None:
         raw = "“Wait—what?” she asked… & then left (alone)."
@@ -284,7 +334,7 @@ class TestVoiceStudioFaultInjection(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(RuntimeError) as ctx:
                 engine.synthesize_lines(lines_bad, "vs-harper", {"voicestudio_speedup": 1.25}, tmp, align=True)
-            self.assertIn("failed validation at L2 after 3 attempts", str(ctx.exception))
+            self.assertIn("failed validation at L2 after 4 attempts", str(ctx.exception))
 
         # Now test successful retry recovery (2 failures -> 3rd try succeeds) + alignment repair when re-align drops words!
         fake_model2 = FakeModel()
@@ -313,6 +363,92 @@ class TestVoiceStudioFaultInjection(unittest.TestCase):
                 res.intended_pauses,
                 max_gap_sec=1.5,
             )
+
+
+    @unittest.skipUnless(HAS_VS_DEPS, "torch/numpy/soundfile not installed in this container")
+    def test_voicestudio_4_attempt_retry_distinct_and_error_detail(self) -> None:
+        import contextlib
+        import io
+        import numpy as np
+        from voicestudio import VoiceStudioEngine
+
+        sr = 24000
+        engine = VoiceStudioEngine()
+
+        class AlwaysSilentModel:
+            def __init__(self) -> None:
+                self.history: list[dict] = []
+
+            def generate(self, **kwargs):
+                import torch
+                self.history.append({
+                    "text": kwargs.get("text", ""),
+                    "seed": int(torch.initial_seed()),
+                    "num_step": kwargs.get("num_step"),
+                    "class_temperature": kwargs.get("class_temperature"),
+                    "duration": kwargs.get("duration"),
+                })
+                return [np.zeros(int(1.6 * sr), dtype=np.float32)]
+
+        silent_model = AlwaysSilentModel()
+        engine.model = silent_model
+
+        class EmptyWhisper:
+            def _transcribe_with_faster_whisper(self, audio_input, **kwargs):
+                return []
+
+        engine._whisper_helper = EmptyWhisper()
+        failing_line_text = "It was me at 2:13 AM, knocking softly. [sigh]"
+        lines_fail = [{"id": "L20", "text": failing_line_text, "emotion": "shocked"}]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(RuntimeError) as ctx:
+                engine.synthesize_lines(lines_fail, "vs-harper", {"voicestudio_speedup": 1.25}, tmp, align=True)
+            err = str(ctx.exception)
+            self.assertIn("L20", err)
+            self.assertIn(failing_line_text, err)
+            self.assertIn("Attempt 1", err)
+            self.assertIn("Attempt 2", err)
+            self.assertIn("Attempt 3", err)
+            self.assertIn("Attempt 4", err)
+
+        self.assertGreaterEqual(len(silent_model.history), 4)
+        self.assertNotEqual(silent_model.history[0]["seed"], silent_model.history[1]["seed"])
+        self.assertIn("two thirteen A M", silent_model.history[0]["text"])
+        self.assertIn("[sigh]", silent_model.history[0]["text"])
+        self.assertNotIn("[sigh]", silent_model.history[-1]["text"])
+
+        class RecoverAttempt2Model:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def generate(self, **kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    return [np.zeros(int(1.6 * sr), dtype=np.float32)]
+                t = np.arange(int(2.4 * sr), dtype=np.float32) / sr
+                return [(0.22 * np.sin(2 * np.pi * 220 * t)).astype(np.float32)]
+
+        class GoodWhisper:
+            def _transcribe_with_faster_whisper(self, audio_input, **kwargs):
+                return [
+                    ("at", 0.05, 0.25),
+                    ("two", 0.25, 0.55),
+                    ("thirteen", 0.55, 0.95),
+                    ("it", 0.95, 1.25),
+                    ("rang", 1.25, 1.75),
+                ]
+
+        engine.model = RecoverAttempt2Model()
+        engine._whisper_helper = GoodWhisper()
+        lines_ok = [{"id": "L20", "text": "At 2:13 it rang.", "emotion": "calm"}]
+        buf = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp:
+            with contextlib.redirect_stdout(buf):
+                res = engine.synthesize_lines(lines_ok, "vs-harper", {"voicestudio_speedup": 1.25}, tmp, align=True)
+        out_log = buf.getvalue()
+        self.assertIn("L20 attempt 2 OK (reseeded=", out_log)
+        self.assertEqual([w.word for w in res.word_timings], ["At", "2:13", "it", "rang."])
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
