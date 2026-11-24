@@ -1,0 +1,28 @@
+name: Diagnostic OmniVoice Probe
+on:
+  workflow_dispatch: {}
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: pipeline/requirements.txt
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub
+          key: storyforge-omni-3fc979d1-hub-v1
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: storyforge-omni-pip-v1
+      - run: |
+          pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install 'omnivoice==0.2.1' 'transformers>=5.3,<6' soundfile numpy
+      - env:
+          HF_HUB_DISABLE_XET: '1'
+        run: python pipeline/diag_omnivoice.py
