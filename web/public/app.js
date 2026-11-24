@@ -1868,7 +1868,8 @@
             <span class="${badgeCls}">${escapeHtml(j.status)}</span>
           </div>
           <div class="row" style="margin-top:0;">
-            ${j.status === 'failed' && (j.voice_engine === 'voicestudio' || j.voice_id?.startsWith('vs')) ? '<button type="button" class="secondary retry-edge-btn" data-id="' + escapeHtml(j.task_id) + '">Re-run with Edge TTS</button>' : ''}
+            ${j.status === 'failed' && (!j.kind || j.kind === 'render') ? '<button type="button" class="secondary rerun-task-btn" data-id="' + escapeHtml(j.task_id) + '">Re-run</button>' : ''}
+            ${j.status === 'failed' && (!j.kind || j.kind === 'render') && (j.voice_engine === 'voicestudio' || j.voice_id?.startsWith('vs')) ? '<button type="button" class="secondary retry-edge-btn" data-id="' + escapeHtml(j.task_id) + '">Re-run with Edge TTS</button>' : ''}
             ${retryBtn}
             <button type="button" class="secondary toggle-logs-btn" data-id="${escapeHtml(j.task_id)}">${logsOpen ? "Hide logs" : "Show logs"}</button>
             ${deleteBtn}
@@ -2053,6 +2054,12 @@
         await loadJobs();
       });
     });
+    container.querySelectorAll('.rerun-task-btn').forEach(btn => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const r = await api('/api/render', {method:'POST', body:JSON.stringify({retry_task:btn.dataset.id})});
+      if (!r.ok) { btn.textContent = r.data.error || 'Re-run failed'; btn.disabled = false; return; }
+      await loadJobs();
+    }));
     container.querySelectorAll('.retry-edge-btn').forEach(btn => btn.addEventListener('click', async () => {
       btn.disabled = true;
       const r = await api('/api/render', {method:'POST', body:JSON.stringify({retry_edge_task:btn.dataset.id})});

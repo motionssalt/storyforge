@@ -1683,13 +1683,38 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       return jsonResp({ error: "Invalid JSON body" }, 400);
     }
 
+    if (body.retry_task !== undefined) {
+      if (typeof body.retry_task !== "string" || !body.retry_task) return jsonResp({ error: "Invalid retry task." }, 400);
+      const retry = await db.prepare(
+        "SELECT production_json, publish_mode, scheduled_for_utc, timezone, voice_id, voice_speed, target_wpm, background_mode, background_clip, background_index FROM tasks WHERE task_id = ? AND status = 'failed' AND kind = 'render'"
+      ).bind(body.retry_task).first<any>();
+      if (!retry?.production_json) return jsonResp({ error: "No failed render task to re-run." }, 409);
+      let config: any = {};
+      try { config = JSON.parse(await getRuntimeState(db, undefined, "task_voice:" + body.retry_task, "{}")); } catch {}
+      const inferredEngine = String(retry.voice_id || "").startsWith("vs") ? "voicestudio" : "edge";
+      body.production_json = JSON.parse(retry.production_json);
+      body.voice_engine = config.voice_engine || inferredEngine;
+      if (retry.voice_id) body.voice_id = retry.voice_id;
+      if (retry.voice_speed) body.voice_speed = retry.voice_speed;
+      if (config.voicestudio_speedup !== undefined && config.voicestudio_speedup !== null) {
+        body.voicestudio_speedup = config.voicestudio_speedup;
+      }
+      body.publish_mode = retry.publish_mode || "immediate";
+      if (retry.scheduled_for_utc) body.scheduled_for_utc = retry.scheduled_for_utc;
+      if (retry.timezone) body.timezone = retry.timezone;
+      if (retry.target_wpm) body.target_wpm = retry.target_wpm;
+      if (retry.background_mode) body.background_mode = retry.background_mode;
+      if (retry.background_clip) body.background_clip = retry.background_clip;
+      if (retry.background_index !== null && retry.background_index !== undefined) body.background_index = retry.background_index;
+    }
     if (body.retry_edge_task !== undefined) {
       if (typeof body.retry_edge_task !== 'string' || !body.retry_edge_task) return jsonResp({error: 'Invalid retry task.'}, 400);
       const retry = await db.prepare(
-        "SELECT production_json, publish_mode, scheduled_for_utc, timezone, target_wpm, background_mode, background_clip, background_index FROM tasks WHERE task_id = ? AND status = 'failed' AND kind = 'render'"
+        "SELECT voice_id, production_json, publish_mode, scheduled_for_utc, timezone, target_wpm, background_mode, background_clip, background_index FROM tasks WHERE task_id = ? AND status = 'failed' AND kind = 'render'"
       ).bind(body.retry_edge_task).first<any>();
       const config = JSON.parse(await getRuntimeState(db, undefined, 'task_voice:' + body.retry_edge_task, "{}"));
-      if (!retry?.production_json || config.voice_engine !== 'voicestudio') return jsonResp({error: 'No failed VoiceStudio render to retry.'}, 409);
+      const isVs = config.voice_engine === 'voicestudio' || String(retry?.voice_id || '').startsWith('vs');
+      if (!retry?.production_json || !isVs) return jsonResp({error: 'No failed VoiceStudio render to retry.'}, 409);
       body.production_json = JSON.parse(retry.production_json);
       body.publish_mode = retry.publish_mode || 'immediate';
       if (retry.scheduled_for_utc) body.scheduled_for_utc = retry.scheduled_for_utc;
@@ -1796,7 +1821,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       )
       .run();
 
-    await setRuntimeState(db, `task_voice:${jobId}`, JSON.stringify({voice_engine: voiceEngine, voicestudio_speedup: settings.voicestudio_speedup}));
+    const vsSpeedup = Number(body.voicestudio_speedup) || settings.voicestudio_speedup;
+    await setRuntimeState(db, `task_voice:${jobId}`, JSON.stringify({voice_engine: voiceEngine, voicestudio_speedup: vsSpeedup}));
     const partStmts = (prod.parts || []).map((p: any) =>
       db
         .prepare(
