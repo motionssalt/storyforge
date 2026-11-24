@@ -1,7 +1,7 @@
 {
   "project": "storyforge",
-  "phase": "round5_voicestudio_complete",
-  "updated_at": "2026-11-20T13:37:06Z",
+  "phase": "round7_omnivoice_silence_retry_text_norm_complete",
+  "updated_at": "2026-11-24T16:31:08Z",
   "phases": {
     "1_vault_migration_and_repo_sanitization": "done",
     "2_schema_and_agent_prompt": "done",
@@ -17,7 +17,17 @@
     "11_round3_sf011_prompt_idea_insertion": "done_deployed_verified",
     "12_round3_sf009_card_shadow_clipping": "done_eye_checked_verified",
     "13_round3_sf010_delete_any_task": "done_deployed_verified",
-    "14_round5_voicestudio_default_samples_design_cloning_tags": "done_deployed_verified"
+    "14_round5_voicestudio_default_samples_design_cloning_tags": "done_deployed_verified",
+    "15_round7_omnivoice_silence_retry_text_norm": {
+      "status": "complete",
+      "completed_at": "2026-11-24T16:31:08Z",
+      "commits": [
+        "b3e8d39",
+        "c283b2c",
+        "a25cf32"
+      ],
+      "summary": "Diagnosed OmniVoice CPU silent-line failure (isolated 3-5 word shards from split_long_segment_for_tts triggering duration misestimation + DC-bias silence across identical retries), fixed sentence packing, added float32 enforcement + language='en' + 4-stage distinct retry ladder + detailed failing-line error reporting, added pre-TTS spoken-word number/time/ordinal/symbol normalization with display-token timestamp mapping across all engines, and added Re-run + Re-run with Edge TTS UI/API support."
+    }
   },
   "decisions": [
     "Stored private research vault (skill/, analysis/, data/, old BUILD_STATE.json, AGENT_PROMPT) in Cloudflare Workers KV namespace 'storyforge-vault' (contact sheets chunked into <= 4.5 MB zips under KV's 25 MiB per-value limit).",
@@ -44,10 +54,14 @@
     "SF-002: Seeded DiceBear v9 avataaars PNG resolution by canonicalized username (cached per job in avatars_cache/) with non-emoji bundled fallback and img.complete/naturalWidth/img.decode() readiness guard so avatars look like cartoon characters and stay identical across every part of a series.",
     "SF-011: Root cause was placeholder mismatch \u2014 vault:agent_prompt in KV uses {{IDEA}} and {{TARGET_WORDS_90S}}, while /api/prompt only replaced {{STORY_IDEA}} and {{TARGET_WPM}} using raw String.replace (which also mangles $&/$1). Added web/shared/prompt.ts with function replacers supporting {{IDEA}}/{{STORY_IDEA}}, {{TARGET_WPM}}, and {{TARGET_WORDS_90S}}, strict error when no idea marker exists, and exact text preservation.",
     "SF-009: Root cause was #stage padding-bottom: 60px in pipeline/render_cards.py clipping the 0 28px 64px box-shadow (alpha was still 23/255 at the 60px cut line in dark theme). Increased #stage padding to 80px 110px 160px 110px (and legacy template to 80px 135px 160px 135px) and shifted default stage_screen_y from 65 to 35 so the card stays at y=115px while all four outer edges fade cleanly to alpha 0.",
-    "SF-010: Added state-aware Delete button and plain in-page confirmation modal on every task card, backed by POST /api/tasks/delete (and DELETE /api/tasks). Uses D1 runtime_state tombstones (deleted_task:<id>) to guarantee non-resurrection against late workflow/log/status callbacks and cron ticks, cancels active GitHub Actions runs via stored task_run:<id> or workflow run-name matching, cancels not-yet-live Zernio posts via DELETE /v1/posts/{id} while reporting already-live posts, deletes renders Release assets by ID/filename/prefix without ever touching shared resources, and preserves delete_failed status for idempotent retry on partial failure."
+    "SF-010: Added state-aware Delete button and plain in-page confirmation modal on every task card, backed by POST /api/tasks/delete (and DELETE /api/tasks). Uses D1 runtime_state tombstones (deleted_task:<id>) to guarantee non-resurrection against late workflow/log/status callbacks and cron ticks, cancels active GitHub Actions runs via stored task_run:<id> or workflow run-name matching, cancels not-yet-live Zernio posts via DELETE /v1/posts/{id} while reporting already-live posts, deletes renders Release assets by ID/filename/prefix without ever touching shared resources, and preserves delete_failed status for idempotent retry on partial failure.",
+    "Round 7 root cause proven via live CPU diagnostic (Run 45420369435): OmniVoice weights were already float32 with zero NaN/inf and digit/clock lines synthesized cleanly; failure on L20 ('It was me. Same clothes...') and L6 ('It was me. Same face...') was caused by split_long_segment_for_tts isolating 3-5 word sentences ('It was me.') which hit OmniVoice short-text duration collapse/DC-bias silence (-56.8 dBFS AC RMS, mean -0.1243) while normalize_text_for_retry returned unchanged text across all 3 retries.",
+    "Round 7 fix: pack consecutive short sentences in split_long_segment_for_tts so short shards are never isolated when neighboring text fits within max_words; enforce torch.float32 on model and audio_tokenizer, pass language='en', and escalate retries across 4 distinct stages (normalized spoken text -> SystemRandom reseeded sampling + duration shift -> clause split/join -> plain tag-stripped rewrite).",
+    "Round 7 pre-TTS normalization: created pipeline/text_norm.py converting clock times, numbers, ordinals, years, apartment codes, currency, percentages, fractions, and symbols to spoken words before TTS for both VoiceStudio and Edge TTS, while map_spoken_timings_to_display maps word/Whisper timings back 1-to-1 onto original display words so subtitles and card scrolling remain synced and keep original text.",
+    "Round 7 UX/API: preserved up to 1800-2000 chars of failure details in run_job.py, enabled pre-wrap error display in web/public/index.html, and added retry_task (same VoiceStudio settings) alongside retry_edge_task on failed tasks in web/public/app.js and web/functions/api/[[path]].ts."
   ],
   "blockers": [],
-  "next_action": "Round 5 complete. Optional next session: UI polish or commercial TTS weights.",
+  "next_action": "Round 7 complete. Optional next session: authenticated browser click check on Re-run button or UI polish if requested.",
   "verification": {
     "vault": {
       "values_verified": 35,
@@ -509,5 +523,66 @@
         "unit_tests_passed": "7/7 (including TestVoiceStudioFaultInjection)"
       }
     }
+  },
+  "round7": {
+    "status": "complete",
+    "updated_at": "2026-11-24T16:31:08Z",
+    "failing_tasks_inspected": {
+      "the_last_channel": {
+        "job_id": "sf_mwtlnjdq_758d08",
+        "voice": "vs-harper",
+        "speed": 1.25,
+        "error": "[tts] OmniVoice synthesis failed validation at L20 after 3 attempts: silent/muffled audio (AC RMS -59.5 dBFS < -33.0)",
+        "example_file": "schema/examples/round7-last-channel.json"
+      },
+      "the_room_between_floors": {
+        "job_id": "sf_mwtlt2jx_ec7987",
+        "voice": "vs-morgan",
+        "speed": 1.25,
+        "example_file": "schema/examples/round7-room-between-floors.json"
+      }
+    },
+    "diagnostic_run": {
+      "workflow": ".github/workflows/diag-omnivoice.yml",
+      "run_id": 45420369435,
+      "url": "https://github.com/motionssalt/storyforge/actions/runs/45420369435",
+      "status": "success",
+      "key_findings": [
+        "CPU tensors confirmed torch.float32 (nan=0, inf=0).",
+        "Isolated 'It was me.' (3 words) collapsed to mean=-0.12430, AC=-56.8 dBFS across seeds 1001/1102/1203, language='en', and num_step=32.",
+        "Packed L20 (15 words) -> -23.0 dBFS, 80% active OK; packed L6 (19 words) -> -22.7 dBFS, 76% active OK; 'At exactly 2:13, the television switched on.' -> -24.4 dBFS OK; explicit duration=1.8 on 'It was me.' -> -21.8 dBFS OK."
+      ]
+    },
+    "verification_run": {
+      "workflow": ".github/workflows/verify-round7.yml",
+      "run_id": 45423634694,
+      "url": "https://github.com/motionssalt/storyforge/actions/runs/45423634694",
+      "status": "success",
+      "unit_and_fault_injection_tests": "9/9 passed in 2.853s (pipeline/test_audio_checks.py)",
+      "last_channel_full_render": {
+        "job_id": "sf_r7_last_channel",
+        "artifact": "round7-last-channel-render (id 14942515126)",
+        "part1": "46 chunks, 2 retries (L18 attempt 3 split 4 clauses, seed=76405279), 588/588 display words aligned, 153.33s, -23.4 dBFS AC, 0 unintended silences >1.2s",
+        "part2": "49 chunks, 0 retries (L20 passed attempt 1), 639/639 display words aligned, 164.87s, -23.6 dBFS AC, 0 unintended silences >1.2s"
+      },
+      "room_between_floors_tts": {
+        "job_id": "sf_r7_room_between_floors",
+        "artifact": "round7-room-between-floors-tts (id 14941372511)",
+        "part1": "35 lines, 57 chunks, 0 retries, 694/694 display words aligned, 187.42s, max_gap=0.68s",
+        "part2": "44 lines, 60 chunks, 1 retry (L35 attempt 2 reseeded=70120818, f32), L6 passed attempt 1, 772/772 display words aligned, 210.96s, max_gap=0.86s"
+      },
+      "subtitle_and_normalization_inspection": "Inspected ASS files and MP4 audio from downloaded artifacts: display text keeps '2:13', '8B', '8C' with 0 'TWO THIRTEEN' leaks while word-highlighting timestamps track spoken audio spans accurately."
+    },
+    "web_deployment": {
+      "platform": "Cloudflare Pages",
+      "project": "storyforge",
+      "url": "https://storyforge-sfb.pages.dev",
+      "deployment_url": "https://ff89c16a.storyforge-sfb.pages.dev",
+      "checked_live_assets": "white-space: pre-wrap on .err, rerun-task-btn and retry-edge-btn in app.js, 401 on unauthenticated POST /api/render"
+    },
+    "not_fully_verified": [
+      "Authenticated browser click on the new Re-run button against live D1 (tested via unauthenticated 401 guard, API handler compilation, and local unit logic).",
+      "Visual eye-check of rendered video frames (verified full MP4 compose/audio/ASS timings; frame visuals follow Round 5/6 unmodified render_cards/compose)."
+    ]
   }
 }
